@@ -1,0 +1,14 @@
+plugins { id 'net.fabricmc.fabric-loom' }
+
+repositories { maven { url = 'https://maven.fabricmc.net/' } }
+dependencies {
+    minecraft libs.minecraft
+    implementation libs.fabric.loader
+    implementation project(':server')
+    include project(':server')
+}
+
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}

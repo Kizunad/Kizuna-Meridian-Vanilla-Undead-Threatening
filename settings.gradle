@@ -1,0 +1,24 @@
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+apply from: new File(rootDir.parentFile, 'Kizuna-Meridian-Mod-Framework/scripts/workspace.gradle')
+rootProject.name = 'kizuna-meridian-vanilla-undead-threatening'
+include 'server', 'fabric'
+
+kizunaWorkspace.includeSource('framework', [
+        server: ['local.meridian:server', 'dev.kizuna.meridian:server'],
+        client: ['local.meridian:client', 'dev.kizuna.meridian:client']
+])
+kizunaWorkspace.includeSource('technique', [
+        fabric: 'dev.kizuna.meridian.technique:fabric',
+        shared: 'dev.kizuna.meridian.technique:shared',
+        server: 'dev.kizuna.meridian.technique:server'
+])
+kizunaWorkspace.includeSource('human', [
+        server: 'dev.kizuna.meridian.human:server'
+])

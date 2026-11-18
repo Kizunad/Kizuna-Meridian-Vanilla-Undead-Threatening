@@ -1,0 +1,31 @@
+description = '尸身模板、公共内容包和类人组成员清单。'
+
+dependencies {
+    api 'local.meridian:server'
+    implementation 'dev.kizuna.meridian.human:server'
+    testImplementation 'dev.kizuna.meridian.technique:server'
+    testImplementation libs.junit4
+    testRuntimeOnly files(kizunaWorkspace.artifact('basic-techniques', 'shared', false))
+    testRuntimeOnly files(kizunaWorkspace.artifact('evoker-elements', 'shared', false))
+}
+
+sourceSets {
+    tooling {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+
+def contentDirectory = layout.buildDirectory.dir('generated/undead-content')
+def exportBundle = tasks.register('exportUndeadBundle', JavaExec) {
+    classpath = sourceSets.tooling.runtimeClasspath
+    mainClass = 'dev.kizuna.meridian.undead.tooling.ExportUndeadBundle'
+    args contentDirectory.get().asFile.absolutePath
+    outputs.dir(contentDirectory)
+}
+tasks.named('jar') { from(exportBundle) }
+tasks.named('test') {
+    useJUnit()
+    dependsOn exportBundle
+    classpath += files(contentDirectory)
+}

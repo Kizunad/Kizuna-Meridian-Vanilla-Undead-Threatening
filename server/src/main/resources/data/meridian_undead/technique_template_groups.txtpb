@@ -1,0 +1,5 @@
+schema_version: 1
+additions {
+  group_id: "human:humanoid"
+  members { id: "meridian_undead:corpse" version: 1 }
+}
