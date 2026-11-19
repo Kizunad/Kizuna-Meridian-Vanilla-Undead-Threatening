@@ -1,0 +1,77 @@
+schema_version: 1
+namespace: "meridian_undead"
+binding_templates { id: "meridian_undead:corpse" version: 1 }
+
+definitions {
+  id: "meridian_undead:leap"
+  version: 1
+  category: MOVEMENT
+  minimum_realm: WANDERING_QI
+  innate: true
+  innate_unlock {
+    opened_meridian_tags: "meridian_undead:trunk"
+    opened_meridian_tags: "meridian_undead:left_leg"
+    opened_meridian_tags: "meridian_undead:right_leg"
+  }
+  slots {
+    id: "pearl"
+    module: ORGAN
+    kind: "meridian_undead:corpse_pearl"
+    minimum_count: 1
+    maximum_count: 1
+  }
+  cost {
+    qi {
+      slot_id: "pearl"
+      amount { value: 3 unit: QI }
+      phase: FREE
+      matching: ANY_ATTRIBUTE_AT_LEAST_PHASE
+      distribution: EACH
+    }
+  }
+  phases {
+    warmup_millis: 600
+    active_millis: 0
+    recovery_millis: 0
+    interruptible_by_damage: true
+  }
+  cooldown_millis: 8000
+  presentation { display_name: "纵" }
+}
+
+definitions {
+  id: "meridian_undead:bronze_hide"
+  version: 1
+  category: DEFENSE
+  minimum_realm: WANDERING_QI
+  innate: true
+  innate_unlock {
+    opened_meridian_tags: "meridian_undead:trunk"
+    opened_meridian_tags: "meridian_undead:left_arm"
+    opened_meridian_tags: "meridian_undead:right_arm"
+  }
+  slots {
+    id: "pearl"
+    module: ORGAN
+    kind: "meridian_undead:corpse_pearl"
+    minimum_count: 1
+    maximum_count: 1
+  }
+  cost {
+    qi {
+      slot_id: "pearl"
+      amount { value: 5 unit: QI }
+      phase: FREE
+      matching: ANY_ATTRIBUTE_AT_LEAST_PHASE
+      distribution: EACH
+    }
+  }
+  phases {
+    warmup_millis: 500
+    active_millis: 0
+    recovery_millis: 0
+    interruptible_by_damage: true
+  }
+  cooldown_millis: 30000
+  presentation { display_name: "铜皮" }
+}

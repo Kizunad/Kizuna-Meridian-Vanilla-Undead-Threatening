@@ -7,6 +7,9 @@
   "authors": ["Kizunad"],
   "license": "PolyForm-Noncommercial-1.0.0",
   "environment": "*",
+  "custom": {
+    "meridian_technique:catalogs": "data/meridian_undead/technique_catalog.txtpb"
+  },
   "entrypoints": {"main": ["dev.kizuna.meridian.undead.fabric.UndeadFabric"]},
   "depends": {
     "fabric-api": "*",
