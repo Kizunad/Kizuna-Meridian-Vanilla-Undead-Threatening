@@ -18,7 +18,7 @@ public final class CorpseBodyTest {
                 .setEpoch("birth")
                 .setElapsedMillis(1)
                 .build();
-        var born = CorpseBody.born(template, "test_corpse", now);
+        var born = CorpseBody.born(template, "test_corpse", now, CorpseRank.WHITE);
         var organs = born.getOrganStatesList().stream().collect(Collectors.toMap(OrganState::getId, state -> state));
         for (var definition : template.getStructure().getOrgansList()) {
             var state = organs.get(definition.getId());

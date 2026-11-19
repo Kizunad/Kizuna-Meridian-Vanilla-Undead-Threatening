@@ -67,7 +67,20 @@ public final class UndeadContentTest {
         for (var meridian : original) {
             var actual = derived.stream().filter(item -> item.getId().equals(meridian.getId()))
                     .findFirst().orElseThrow();
-            assertEquals(meridian.getId(), meridian, actual);
+            var expected = meridian.toBuilder();
+            String tag = switch (meridian.getId()) {
+                case "ren" -> "meridian_undead:trunk";
+                case "left_lung_meridian" -> "meridian_undead:left_arm";
+                case "right_lung_meridian" -> "meridian_undead:right_arm";
+                case "left_stomach_meridian" -> "meridian_undead:left_leg";
+                case "right_stomach_meridian" -> "meridian_undead:right_leg";
+                case "du" -> "meridian_undead:head";
+                default -> null;
+            };
+            if (tag != null) {
+                expected.addTags(tag);
+            }
+            assertEquals(meridian.getId(), expected.build(), actual);
         }
     }
 

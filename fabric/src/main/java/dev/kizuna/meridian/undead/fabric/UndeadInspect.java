@@ -1,9 +1,14 @@
 package dev.kizuna.meridian.undead.fabric;
 
 import dev.kizuna.meridian.fabric.MeridianCommands;
+import dev.kizuna.meridian.humanoid.server.HumanoidTier;
+import dev.kizuna.meridian.protocol.QiDensity;
 import dev.kizuna.meridian.protocol.BodyProtobuf;
 import dev.kizuna.meridian.protocol.pb.BodyMessages.BodySnapshot;
 import dev.kizuna.meridian.protocol.pb.BodyMessages.PartState;
+import dev.kizuna.meridian.protocol.pb.BodyMessages.MeridianOpeningStage;
+import dev.kizuna.meridian.protocol.pb.BodyMessages.MeridianState;
+import dev.kizuna.meridian.undead.server.UndeadContent;
 import dev.kizuna.meridian.vanilla.fabric.VanillaDamageFabric;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -77,14 +82,25 @@ final class UndeadInspect {
         // 部位名称和上限取自这具身体的当前图纸，尸丹库存按各属性合计。
         var text = new StringBuilder(body.getTemplate().getId());
         var structure = body.getStructure();
+        var opened = body.getMeridianStatesList().stream()
+                .filter(state -> state.getOpening().getStage() == MeridianOpeningStage.OPENED)
+                .map(MeridianState::getId).collect(Collectors.toSet());
+        String channels = structure.getMeridiansList().stream().filter(channel -> opened.contains(channel.getId()))
+                .map(channel -> channel.getDisplayName()).collect(Collectors.joining("、"));
+        text.append(" ").append(UndeadFabric.rank(HumanoidTier.of(body)).label());
+        text.append("\n已开经脉：").append(channels.isEmpty() ? "无" : channels);
         var hp = body.getPartStatesList().stream().collect(Collectors.toMap(PartState::getId, PartState::getHp));
         for (var part : structure.getPartsList()) {
             text.append(String.format(Locale.ROOT, "\n%s %.2f / %.2f", part.getDisplayName(),
                     hp.get(part.getId()), part.getMaxHp()));
         }
-        var pearl = body.getOrganStatesList().stream().filter(organ -> organ.getId().equals("corpse_pearl"))
+        var pearl = body.getOrganStatesList().stream().filter(organ -> organ.getId().equals(UndeadContent.PEARL))
                 .findFirst().orElseThrow();
         double qi = BodyProtobuf.fromInventory(pearl.getBuffer()).totalQi();
-        return text.append(String.format(Locale.ROOT, "\n尸丹 HP %.2f，存元 %.2f", pearl.getHp(), qi)).toString();
+        var definition = structure.getOrgansList().stream().filter(organ -> organ.getId().equals(UndeadContent.PEARL))
+                .findFirst().orElseThrow();
+        double capacity = definition.getVolumeCapacity() * QiDensity.FREE;
+        return text.append(String.format(Locale.ROOT, "\n尸丹 HP %.2f，存元 %.2f / %.2f", pearl.getHp(), qi, capacity))
+                .toString();
     }
 }

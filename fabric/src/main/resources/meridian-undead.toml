@@ -3,3 +3,9 @@ zombie = true
 husk = true
 drowned = true
 zombie_villager = true
+
+# 按当地难度在 0.75 到 6.75 之间线性插值。同一端点的两种几率相加至多为 1。
+black_chance_min = 0.04
+black_chance_max = 0.12
+hairy_chance_min = 0.005
+hairy_chance_max = 0.02

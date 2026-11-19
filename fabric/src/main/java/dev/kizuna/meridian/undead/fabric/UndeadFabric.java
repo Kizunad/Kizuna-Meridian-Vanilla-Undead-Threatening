@@ -3,8 +3,11 @@ package dev.kizuna.meridian.undead.fabric;
 import dev.kizuna.meridian.human.server.HumanContent;
 import dev.kizuna.meridian.human.server.HumanDamage;
 import dev.kizuna.meridian.humanoid.fabric.HumanoidSpeciesHooks;
+import dev.kizuna.meridian.humanoid.fabric.HumanoidSpawns;
+import dev.kizuna.meridian.humanoid.server.HumanoidTier;
 import dev.kizuna.meridian.humanoid.server.SpeciesBodyRules;
 import dev.kizuna.meridian.undead.server.CorpseBody;
+import dev.kizuna.meridian.undead.server.CorpseRank;
 import dev.kizuna.meridian.undead.server.UndeadContent;
 import dev.kizuna.meridian.vanilla.fabric.VanillaDamageFabric;
 import java.nio.file.Path;
@@ -17,6 +20,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.zombie.Zombie.ZombieGroupData;
 
 public final class UndeadFabric implements ModInitializer {
     static final Map<EntityType<?>, String> SPECIES = Map.of(EntityTypes.ZOMBIE, "zombie",
@@ -48,12 +52,16 @@ public final class UndeadFabric implements ModInitializer {
         });
         var bundle = UndeadContent.bundle();
         var template = bundle.getTemplates(0);
-        var rules = new SpeciesBodyRules(request -> CorpseBody.born(template, request.bodyId(), request.now()),
-                (wounded, human) -> CorpseBody.lethal(wounded));
+        var rules = new SpeciesBodyRules(
+                request -> CorpseBody.born(template, request.bodyId(), request.now(), rank(request.tier())),
+                (wounded, human) -> CorpseBody.lethal(wounded),
+                (spawn, random) -> config.chances().choose(spawn, random));
         String table = SPECIES.values().stream().sorted()
                 .map(id -> ENTRY.formatted(id, UndeadContent.TEMPLATE_ID))
                 .collect(Collectors.joining("\n"));
-        HumanoidSpeciesHooks.registerAll(table, rules, UndeadFabric::accepts, List.of(bundle));
+        var species = HumanoidSpeciesHooks.registerAll(table, rules, UndeadFabric::accepts, List.of(bundle));
+        species.forEach(entry -> HumanoidSpawns.registerCommandGroup(entry,
+                () -> new ZombieGroupData(false /* isBaby */, false /* canSpawnJockey */)));
         HumanDamage.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
         VanillaDamageFabric.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
         UndeadInspect.register();
@@ -66,5 +74,13 @@ public final class UndeadFabric implements ModInitializer {
 
     static void reloadConfig(Path path) {
         config = CorpseConfig.load(path);
+    }
+
+    static CorpseRank rank(HumanoidTier tier) {
+        return switch (tier) {
+            case MORTAL -> CorpseRank.WHITE;
+            case WANDERING_QI -> CorpseRank.BLACK;
+            case TRUE_QI -> CorpseRank.HAIRY;
+        };
     }
 }

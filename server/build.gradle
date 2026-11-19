@@ -21,6 +21,8 @@ def exportBundle = tasks.register('exportUndeadBundle', JavaExec) {
     classpath = sourceSets.tooling.runtimeClasspath
     mainClass = 'dev.kizuna.meridian.undead.tooling.ExportUndeadBundle'
     args contentDirectory.get().asFile.absolutePath
+    inputs.files(sourceSets.main.output)
+    inputs.files(configurations.runtimeClasspath)
     outputs.dir(contentDirectory)
 }
 tasks.named('jar') { from(exportBundle) }

@@ -13,10 +13,9 @@ public final class UndeadContent {
     public static final String TEMPLATE_ID = "meridian_undead:corpse";
     public static final int CONTENT_VERSION = 1;
     private static final String PEARL_KIND = "meridian_undead:corpse_pearl";
-    private static final String PEARL = "corpse_pearl";
+    public static final String PEARL = "corpse_pearl";
     private static final double MUSCLE_ENDURANCE_JOULES = 1_000_000_000;
     private static final double MENTAL_ENDURANCE_RATIO = 0.2;
-    private static final double PEARL_FREE_QI = 10;
     private static final double PEARL_HP = 10;
     private static final double PEARL_THROUGHPUT = 1;
     private static final double PEARL_PATH_METERS = 0.1;
@@ -75,6 +74,12 @@ public final class UndeadContent {
         var structure = adult.getStructure().toBuilder();
         adjustTissueEndurance(structure);
         adjustOrgans(structure);
+        for (var channel : structure.getMeridiansBuilderList()) {
+            String tag = CorpseRank.CHANNEL_TAGS.get(channel.getId());
+            if (tag != null) {
+                channel.addTags(tag);
+            }
+        }
         structure.addOrgans(pearl());
         structure.addConnections(connection(PEARL, "ren"));
         structure.addConnections(connection("ren", PEARL));
@@ -125,7 +130,7 @@ public final class UndeadContent {
                 .setDisplayName("尸丹")
                 .setPartId("abdomen")
                 .setMaxHp(PEARL_HP)
-                .setVolumeCapacity(PEARL_FREE_QI / QiDensity.FREE)
+                .setVolumeCapacity(CorpseRank.WHITE.capacity / QiDensity.FREE)
                 .setThroughputPerSecond(PEARL_THROUGHPUT)
                 .addPorts(port(PEARL + ".in", PortDirection.INPUT))
                 .addPorts(port(PEARL + ".out", PortDirection.OUTPUT))
