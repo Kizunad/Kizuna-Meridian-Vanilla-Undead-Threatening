@@ -1,19 +1,24 @@
 package dev.kizuna.meridian.undead.server;
 
 import dev.kizuna.meridian.core.Anatomy.ConnectionId;
+import dev.kizuna.meridian.core.Anatomy.OrganId;
 import dev.kizuna.meridian.core.BodySnapshot;
 import dev.kizuna.meridian.core.BodyTimeAdvancement;
+import dev.kizuna.meridian.core.OrganIntake;
 import dev.kizuna.meridian.core.QiTransport;
 import dev.kizuna.meridian.core.TimeCursor;
+import dev.kizuna.meridian.error.MeridianErrors.IntakeRejected;
 import dev.kizuna.meridian.human.server.HumanBirth;
 import dev.kizuna.meridian.human.server.HumanContent;
 import dev.kizuna.meridian.protocol.BodyProtobuf;
 import dev.kizuna.meridian.protocol.QiDensity;
 import dev.kizuna.meridian.protocol.pb.BodyMessages;
 import dev.kizuna.meridian.protocol.pb.BodyMessages.*;
+import dev.kizuna.meridian.protocol.pb.MeridianMessages.FailureCode;
 import dev.kizuna.meridian.server.AddonRegistry;
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.*;
 import dev.kizuna.meridian.technique.server.TechniqueAddonResources;
+import dev.kizuna.meridian.technique.server.TechniqueAvailability;
 import dev.kizuna.meridian.technique.server.TechniqueBinder;
 import dev.kizuna.meridian.technique.server.TechniqueCatalogManifest;
 import dev.kizuna.meridian.technique.server.TechniqueRegistry;
@@ -21,8 +26,9 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.*;
@@ -32,15 +38,12 @@ public final class UndeadContentTest {
     private static final String BASIC = "meridian_basic_techniques";
     private static final String EVOKER = "meridian_evoker";
     private static final String STEP = BASIC + ":light_step";
-    private static final String LIVER = EVOKER + ":refine_liver";
-    private static final double ATTENTION_RATIO = 0.2;
+    private static final double MENTAL_ENDURANCE_RATIO = 0.2;
     private static final double PEARL_FREE_QI = 10;
+    private static final double PEARL_HP = 10;
     private static final double MUSCLE_ENDURANCE = 1_000_000_000;
-    private static final double INITIAL_REN_QI = 0.5;
-    private static final double INITIAL_PEARL_QI = 1;
-    // 小于原器官占位体积可容纳的量，误接到旧器官时也足以实际到账。
+    // 低于人体经脉的自然扩散起运量，可在收回时核对同一批货的完整余额。
     private static final double SHIPMENT_QI = 0.000_001;
-    private static final int CHECK_INTERVAL_MILLIS = 100;
     private static final int ADVANCE_MILLIS = 10_000;
 
     @Test
@@ -57,7 +60,7 @@ public final class UndeadContentTest {
         var addons = addons();
         var body = corpse(addons);
         var registry = TechniqueRegistry.load(addons, List.of(catalog(BASIC)));
-        assertApplies(registry, body, STEP);
+        assertApplies(registry, body, registry.findLatest(STEP).orElseThrow());
         var original = adult(addons).getStructure().getMeridiansList();
         var derived = body.getStructure().getMeridiansList();
         assertEquals(original.size(), derived.size());
@@ -69,22 +72,35 @@ public final class UndeadContentTest {
     }
 
     @Test
-    public void legsBindOnCorpseButLiverSlotRequiresTheLivingOrgan() throws IOException {
-        // 同境界、同开脉状态下，组内双方都可用目录；炼肝只因本脏槽缺失而失败。
+    public void fiveRefinementsBindToTheirOwnOrgansAndCanPayTheirWorkCosts() throws IOException {
         var addons = addons();
         var human = adult(addons);
         var undead = corpse(addons);
         var registry = TechniqueRegistry.load(addons, List.of(catalog(BASIC), catalog(EVOKER)));
-        var lightStep = registry.findLatest(STEP).orElseThrow();
-        var refine = registry.findLatest(LIVER).orElseThrow();
-        assertApplies(registry, undead, STEP);
-        assertApplies(registry, undead, LIVER);
         var living = openSnapshot(human, human);
         var dead = openSnapshot(human, undead);
-        assertTrue(TechniqueBinder.bind(living, refine).hasBinding());
-        assertTrue(TechniqueBinder.bind(dead, lightStep).hasBinding());
-        var rejected = TechniqueBinder.bind(dead, refine);
-        assertEquals(rejected.getReason(), TechniqueFailure.MISSING_MODULE, rejected.getFailure());
+        assertTrue(TechniqueBinder.bind(dead, registry.findLatest(STEP).orElseThrow()).hasBinding());
+        var organsByForm = Map.of(
+                "refine_liver", Set.of("liver"),
+                "refine_heart", Set.of("heart"),
+                "refine_spleen", Set.of("spleen"),
+                "refine_lung", Set.of("left_lung", "right_lung"),
+                "refine_kidney", Set.of("left_kidney", "right_kidney"));
+        for (var form : organsByForm.entrySet()) {
+            String id = EVOKER + ":" + form.getKey();
+            var definition = registry.findLatest(id).orElseThrow();
+            assertApplies(registry, undead, definition);
+            for (var body : List.of(living, dead)) {
+                var outcome = TechniqueBinder.bind(body, definition);
+                String context = body.template() + " " + id;
+                assertTrue(context + " " + outcome.getReason(), outcome.hasBinding());
+                var binding = outcome.getBinding();
+                var zang = binding.getSlotsList().stream().filter(slot -> slot.getSlotId().equals("zang"))
+                        .findFirst().orElseThrow();
+                assertEquals(context, form.getValue(), Set.copyOf(zang.getModuleIdsList()));
+                assertTrue(context, TechniqueAvailability.workable(body, definition, binding));
+            }
+        }
     }
 
     @Test
@@ -100,7 +116,7 @@ public final class UndeadContentTest {
             var expected = original.toBuilder();
             if (original.getId().equals("attention_network")) {
                 expected.getCapacityBuilder().setEnduranceJoules(original.getCapacity().getEnduranceJoules()
-                        * ATTENTION_RATIO);
+                        * MENTAL_ENDURANCE_RATIO);
             } else if (original.getKind().equals("human:muscle")) {
                 expected.getCapacityBuilder().setEnduranceJoules(MUSCLE_ENDURANCE);
             }
@@ -109,86 +125,105 @@ public final class UndeadContentTest {
     }
 
     @Test
-    public void onlyThePearlConnectsToTheMeridians() {
-        // 原器官仍有独立的受伤位置；图上只多出尸丹进出任脉的两条边。
+    public void corpseInheritsHumanOrgansAndAddsThePearlOnRen() {
         var registry = addons();
         var human = adult(registry).getStructure();
         var undead = corpse(registry).getStructure();
         assertEquals(human.getOrgansCount() + 1, undead.getOrgansCount());
-        for (var organ : undead.getOrgansList()) {
-            assertFalse(organ.hasIntake());
-            assertFalse(organ.hasEndurance());
-            var tags = organ.getTagsList();
-            assertFalse(tags.contains("human:breathing"));
-            assertFalse(tags.stream().anyMatch(tag -> tag.startsWith("human:zang_")));
-        }
         for (var original : human.getOrgansList()) {
-            var organ = organ(undead, original.getId());
-            assertEquals(original.getPartId(), organ.getPartId());
-            assertEquals(original.getDisplayName(), organ.getDisplayName());
-            assertEquals(organ.getId(), 0, organ.getPortsCount());
-            assertEquals(original.getMaxHp(), organ.getMaxHp(), 0);
-            assertEquals("meridian_undead:inert_organ", organ.getKind());
-            assertTrue(organ.getVolumeCapacity() > 0);
+            var expected = original.toBuilder();
+            if (original.getKind().equals("human:lung")) {
+                expected.clearIntake().clearTags();
+                original.getTagsList().stream().filter(tag -> !tag.equals("human:breathing"))
+                        .forEach(expected::addTags);
+            } else if (original.getKind().equals("human:brain")) {
+                double endurance = original.getEndurance().getEnduranceJoules();
+                expected.getEnduranceBuilder().setEnduranceJoules(endurance * MENTAL_ENDURANCE_RATIO);
+            }
+            assertEquals(original.getId(), expected.build(), organ(undead, original.getId()));
         }
         var pearl = organ(undead, "corpse_pearl");
         assertEquals("meridian_undead:corpse_pearl", pearl.getKind());
         assertEquals("abdomen", pearl.getPartId());
+        assertEquals(PEARL_HP, pearl.getMaxHp(), 0);
+        assertEquals(1, pearl.getThroughputPerSecond(), 0);
         assertEquals(PEARL_FREE_QI, pearl.getVolumeCapacity() * QiDensity.FREE, 0);
-        assertConnections(human, undead);
-    }
-
-    private static void assertConnections(BodyStructure human, BodyStructure undead) {
-        // 从仍参与连通的组织和经脉一侧重建期望边集，逐条比较人体图纸中的全部边属性。
-        var ports = new HashSet<String>();
-        human.getTissuesList().forEach(tissue -> tissue.getPortsList().forEach(port -> ports.add(port.getId())));
-        human.getMeridiansList().forEach(channel -> channel.getPortsList().forEach(port -> ports.add(port.getId())));
-        var inherited = human.getConnectionsList().stream()
-                .filter(edge -> ports.contains(edge.getFrom()) && ports.contains(edge.getTo()))
-                .toList();
-        assertTrue(undead.getConnectionsList().containsAll(inherited));
+        assertEquals(human.getConnectionsCount() + 2, undead.getConnectionsCount());
+        assertTrue(undead.getConnectionsList().containsAll(human.getConnectionsList()));
         assertTrue(connected(undead, "corpse_pearl.out", "ren.in"));
         assertTrue(connected(undead, "ren.out", "corpse_pearl.in"));
-        assertEquals(inherited.size() + 2, undead.getConnectionsCount());
     }
 
     @Test
-    public void qiArrivesInThePearlWhileOldOrgansStayEmpty() throws IOException {
-        // 真实发运与主动时间结算同时驱动任脉输送和经脉间扩散。
+    public void lungsRejectEnvironmentalIntake() throws IOException {
         var registry = addons();
-        var open = openSnapshot(adult(registry), corpse(registry));
-        var initial = withStoredQi(open);
-        var cargo = BodyProtobuf.fromInventory(freeQi(SHIPMENT_QI));
-        var shipment = new QiTransport.Request(new ConnectionId("ren.to.corpse_pearl"), cargo, 1);
-        var current = QiTransport.start(initial, shipment);
-        var clock = current.settledAt();
-        for (int millis = CHECK_INTERVAL_MILLIS; millis <= ADVANCE_MILLIS; millis += CHECK_INTERVAL_MILLIS) {
-            var target = new TimeCursor(clock.domain(), clock.epoch(), millis);
-            var plan = new BodyTimeAdvancement.Plan(target, 1, BodyTimeAdvancement.Mode.ACTIVE);
-            current = BodyTimeAdvancement.apply(current, plan).body();
-            assertEquals(target, current.settledAt());
-            for (var organ : current.organStates()) {
-                String id = organ.id().value();
-                if (!id.equals("corpse_pearl")) {
-                    assertEquals(id + " @ " + millis + " ms", 0, organ.occupiedQi(), 0);
-                }
-            }
+        var body = openSnapshot(adult(registry), corpse(registry));
+        var plan = activeInterval(body);
+        var incoming = BodyProtobuf.fromInventory(freeQi(SHIPMENT_QI));
+        for (String lung : List.of("left_lung", "right_lung")) {
+            var id = new OrganId(lung);
+            var rejected = assertThrows(lung, IntakeRejected.class, () -> OrganIntake.apply(body, id, incoming, plan));
+            assertEquals(lung, FailureCode.INTAKE_UNSUPPORTED, rejected.code());
         }
-        var pearl = current.organStates().stream().filter(organ -> organ.id().value().equals("corpse_pearl"))
-                .findFirst().orElseThrow();
-        assertEquals(INITIAL_PEARL_QI + SHIPMENT_QI, pearl.buffer().totalQi(), 0);
     }
 
-    private static BodySnapshot withStoredQi(BodySnapshot body) {
-        // 任脉为发运源，尸丹也预存真元；原有的十五个器官从健康空账户开始。
-        var snapshot = BodyProtobuf.toMessage(body).toBuilder();
-        var ren = snapshot.getMeridianStatesBuilderList().stream().filter(state -> state.getId().equals("ren"))
+    @Test
+    public void corpseDoesNotPublishBreathingActionsOrProfile() throws IOException {
+        var profile = HumanContent.breathing();
+        var breathingActions = Set.of(profile.getBodyAction().getId(), profile.getAutomatic().getBodyAction().getId());
+        assertFalse(UndeadContent.bundle().getActionsList().stream()
+                .anyMatch(action -> breathingActions.contains(action.getId())));
+        assertEquals(1, Collections.list(LOADER.getResources(HumanContent.BREATHING_RESOURCE)).size());
+        assertNull(LOADER.getResource("META-INF/kizuna_meridian/meridian_undead-breathing.pb"));
+    }
+
+    @Test
+    public void liverStoresQiAndReturnsItToItsMeridian() throws IOException {
+        assertRoundTrip("left_liver_meridian", "liver");
+    }
+
+    @Test
+    public void pearlStoresQiAndReturnsItToRen() throws IOException {
+        assertRoundTrip("ren", "corpse_pearl");
+    }
+
+    private static void assertRoundTrip(String meridian, String organ) throws IOException {
+        var registry = addons();
+        var open = openSnapshot(adult(registry), corpse(registry));
+        var snapshot = BodyProtobuf.toMessage(open).toBuilder();
+        var cargo = freeQi(SHIPMENT_QI);
+        var empty = QiInventory.getDefaultInstance();
+        for (var state : snapshot.getMeridianStatesBuilderList()) {
+            state.setLumenQi(state.getId().equals(meridian) ? cargo : empty);
+        }
+        var initial = BodyProtobuf.fromMessage(snapshot.build());
+        var received = deliver(initial, meridian, organ);
+        assertEquals(SHIPMENT_QI, organBalance(received, organ), 0);
+        var stored = BodyTimeAdvancement.apply(received, activeInterval(received)).body();
+        assertEquals(SHIPMENT_QI, organBalance(stored, organ), 0);
+        var returned = deliver(stored, organ, meridian);
+        assertEquals(0, organBalance(returned, organ), 0);
+        var channel = returned.meridianStates().stream().filter(state -> state.id().value().equals(meridian))
                 .findFirst().orElseThrow();
-        ren.setLumenQi(freeQi(INITIAL_REN_QI));
-        var pearl = snapshot.getOrganStatesBuilderList().stream().filter(state -> state.getId().equals("corpse_pearl"))
-                .findFirst().orElseThrow();
-        pearl.setBuffer(freeQi(INITIAL_PEARL_QI));
-        return BodyProtobuf.fromMessage(snapshot.build());
+        assertEquals(SHIPMENT_QI, channel.lumenQi().totalQi(), 0);
+    }
+
+    private static double organBalance(BodySnapshot body, String id) {
+        return body.organStates().stream().filter(state -> state.id().value().equals(id))
+                .findFirst().orElseThrow().buffer().totalQi();
+    }
+
+    private static BodySnapshot deliver(BodySnapshot body, String from, String to) {
+        var cargo = BodyProtobuf.fromInventory(freeQi(SHIPMENT_QI));
+        var request = new QiTransport.Request(new ConnectionId(from + ".to." + to), cargo, 1);
+        var sent = QiTransport.start(body, request);
+        return BodyTimeAdvancement.apply(sent, activeInterval(sent)).body();
+    }
+
+    private static BodyTimeAdvancement.Plan activeInterval(BodySnapshot body) {
+        var now = body.settledAt();
+        var target = new TimeCursor(now.domain(), now.epoch(), now.elapsedMillis() + ADVANCE_MILLIS);
+        return new BodyTimeAdvancement.Plan(target, 1, BodyTimeAdvancement.Mode.ACTIVE);
     }
 
     private static QiInventory freeQi(double amount) {
@@ -232,11 +267,14 @@ public final class UndeadContentTest {
         }
     }
 
-    private static void assertApplies(TechniqueRegistry registry, BodyTemplate template, String id) {
+    private static void assertApplies(TechniqueRegistry registry, BodyTemplate template,
+                                      TechniqueDefinition technique) {
         // 使用与运行时学式和起式相同的版本化范围查询。
-        var definition = registry.findLatest(id).orElseThrow();
-        var reference = TechniqueReference.newBuilder().setId(id).setVersion(definition.getVersion()).build();
-        assertTrue(id, registry.applies(reference, BodyProtobuf.fromMessage(template).reference()));
+        var reference = TechniqueReference.newBuilder()
+                .setId(technique.getId())
+                .setVersion(technique.getVersion())
+                .build();
+        assertTrue(reference.getId(), registry.applies(reference, BodyProtobuf.fromMessage(template).reference()));
     }
 
     private static BodySnapshot openSnapshot(BodyTemplate human, BodyTemplate template)

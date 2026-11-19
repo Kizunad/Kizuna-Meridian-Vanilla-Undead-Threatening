@@ -7,20 +7,15 @@ import dev.kizuna.meridian.protocol.pb.AddonMessages.*;
 import dev.kizuna.meridian.protocol.pb.BodyMessages.*;
 import dev.kizuna.meridian.server.AddonRegistry;
 
-import java.util.HashSet;
-
 /** 尸身内容包的公开入口，直接复用人体的版本化图纸。 */
 public final class UndeadContent {
     public static final String NAMESPACE = "meridian_undead";
     public static final String TEMPLATE_ID = "meridian_undead:corpse";
     public static final int CONTENT_VERSION = 1;
-    private static final String INERT_KIND = "meridian_undead:inert_organ";
     private static final String PEARL_KIND = "meridian_undead:corpse_pearl";
     private static final String PEARL = "corpse_pearl";
-    // 无端口器官仍须有正的参照体积；千分之一体积在游离态下对应十万分之一元。
-    private static final double INERT_ORGAN_VOLUME = 0.001;
     private static final double MUSCLE_ENDURANCE_JOULES = 1_000_000_000;
-    private static final double ATTENTION_ENDURANCE_RATIO = 0.2;
+    private static final double MENTAL_ENDURANCE_RATIO = 0.2;
     private static final double PEARL_FREE_QI = 10;
     private static final double PEARL_HP = 10;
     private static final double PEARL_THROUGHPUT = 1;
@@ -41,8 +36,7 @@ public final class UndeadContent {
         var result = AddonBundle.newBuilder()
                 .setSchemaVersion(human.getSchemaVersion())
                 .setManifest(manifest(human.getManifest()))
-                .addSymbols(organKind(INERT_KIND))
-                .addSymbols(organKind(PEARL_KIND))
+                .addSymbols(pearlKind())
                 .addTemplates(corpse(adult))
                 .build();
         AddonProtobuf.validateBundle(result);
@@ -69,16 +63,18 @@ public final class UndeadContent {
                 .build();
     }
 
-    private static ContentSymbol organKind(String id) {
-        // 配方按器官种类匹配，旧器官与尸丹各有自己的种类。
-        return ContentSymbol.newBuilder().setId(id).setKind(ContentSymbolKind.ORGAN_KIND).build();
+    private static ContentSymbol pearlKind() {
+        return ContentSymbol.newBuilder()
+                .setId(PEARL_KIND)
+                .setKind(ContentSymbolKind.ORGAN_KIND)
+                .build();
     }
 
     private static BodyTemplate corpse(BodyTemplate adult) {
-        // 继承人体图纸，在断开原器官后将尸丹接入任脉。
+        // 继承人体的本脏通路，尸丹另接任脉。
         var structure = adult.getStructure().toBuilder();
-        adjustEndurance(structure);
-        disconnectOrgans(structure);
+        adjustTissueEndurance(structure);
+        adjustOrgans(structure);
         structure.addOrgans(pearl());
         structure.addConnections(connection(PEARL, "ren"));
         structure.addConnections(connection("ren", PEARL));
@@ -88,22 +84,19 @@ public final class UndeadContent {
                 .build();
     }
 
-    private static void disconnectOrgans(BodyStructure.Builder structure) {
-        // 以原图纸的端口归属识别连接，保留所有两端都属于其他模块的边。
-        var organPorts = new HashSet<String>();
+    private static void adjustOrgans(BodyStructure.Builder structure) {
         for (var organ : structure.getOrgansBuilderList()) {
-            organ.getPortsList().forEach(port -> organPorts.add(port.getId()));
-            organ.setKind(INERT_KIND)
-                    .clearIntake()
-                    .clearEndurance()
-                    .clearTags()
-                    .clearPorts()
-                    .setVolumeCapacity(INERT_ORGAN_VOLUME);
+            if (organ.getKind().equals("human:lung")) {
+                // 肺保留本脏标签和经脉收发能力，不能从环境摄入。
+                var tags = organ.getTagsList().stream().filter(tag -> !tag.equals("human:breathing")).toList();
+                organ.clearIntake()
+                        .clearTags()
+                        .addAllTags(tags);
+            } else if (organ.getKind().equals("human:brain")) {
+                var budget = organ.getEnduranceBuilder();
+                budget.setEnduranceJoules(budget.getEnduranceJoules() * MENTAL_ENDURANCE_RATIO);
+            }
         }
-        var kept = structure.getConnectionsList().stream()
-                .filter(edge -> !organPorts.contains(edge.getFrom()) && !organPorts.contains(edge.getTo()))
-                .toList();
-        structure.clearConnections().addAllConnections(kept);
     }
 
     private static TemplateReference reference(String id, int version) {
@@ -111,14 +104,14 @@ public final class UndeadContent {
         return TemplateReference.newBuilder().setId(id).setVersion(version).build();
     }
 
-    private static void adjustEndurance(BodyStructure.Builder structure) {
+    private static void adjustTissueEndurance(BodyStructure.Builder structure) {
         // 注意力与肌肉各自使用组织做功预算，爆发功率和力量继续来自人体。
         for (var tissue : structure.getTissuesBuilderList()) {
             if (tissue.getKind().equals("human:muscle")) {
                 tissue.getCapacityBuilder().setEnduranceJoules(MUSCLE_ENDURANCE_JOULES);
             } else if (tissue.getId().equals("attention_network")) {
                 var capacity = tissue.getCapacityBuilder();
-                double endurance = capacity.getEnduranceJoules() * ATTENTION_ENDURANCE_RATIO;
+                double endurance = capacity.getEnduranceJoules() * MENTAL_ENDURANCE_RATIO;
                 capacity.setEnduranceJoules(endurance);
             }
         }
