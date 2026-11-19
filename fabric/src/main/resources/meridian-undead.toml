@@ -1,0 +1,5 @@
+# 成年个体是否使用尸身。修改后执行 /reload。
+zombie = true
+husk = true
+drowned = true
+zombie_villager = true

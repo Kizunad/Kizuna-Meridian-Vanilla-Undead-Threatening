@@ -1,0 +1,70 @@
+package dev.kizuna.meridian.undead.fabric;
+
+import dev.kizuna.meridian.human.server.HumanContent;
+import dev.kizuna.meridian.human.server.HumanDamage;
+import dev.kizuna.meridian.humanoid.fabric.HumanoidSpeciesHooks;
+import dev.kizuna.meridian.humanoid.server.SpeciesBodyRules;
+import dev.kizuna.meridian.undead.server.CorpseBody;
+import dev.kizuna.meridian.undead.server.UndeadContent;
+import dev.kizuna.meridian.vanilla.fabric.VanillaDamageFabric;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.LivingEntity;
+
+public final class UndeadFabric implements ModInitializer {
+    static final Map<EntityType<?>, String> SPECIES = Map.of(EntityTypes.ZOMBIE, "zombie",
+            EntityTypes.HUSK, "husk", EntityTypes.DROWNED, "drowned", EntityTypes.ZOMBIE_VILLAGER, "zombie_villager");
+    private static final String ENTRY = """
+            [species."minecraft:%1$s"]
+            template = "%2$s"
+            default_tier = "mortal"
+            brain = false
+            [species."minecraft:%1$s".profile]
+            true_qi_base_probability = 0.0
+            opening_count_multiplier = 1.0
+            fill_multiplier = 1.0
+            wall_fill_multiplier = 1.0
+            arm_opening_weight = 1.0
+            foot_opening_weight = 1.0
+            """;
+    private static CorpseConfig config;
+
+    @Override
+    public void onInitialize() {
+        // 四种实体使用同一修订的图纸、出生工厂和死亡裁决。
+        Path path = FabricLoader.getInstance().getConfigDir().resolve("meridian-undead.toml");
+        reloadConfig(path);
+        ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> {
+            if (success) {
+                reloadConfig(path);
+            }
+        });
+        var bundle = UndeadContent.bundle();
+        var template = bundle.getTemplates(0);
+        var rules = new SpeciesBodyRules(request -> CorpseBody.born(template, request.bodyId(), request.now()),
+                (wounded, human) -> CorpseBody.lethal(wounded));
+        String table = SPECIES.values().stream().sorted()
+                .map(id -> ENTRY.formatted(id, UndeadContent.TEMPLATE_ID))
+                .collect(Collectors.joining("\n"));
+        HumanoidSpeciesHooks.registerAll(table, rules, UndeadFabric::accepts, List.of(bundle));
+        HumanDamage.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
+        VanillaDamageFabric.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
+        UndeadInspect.register();
+    }
+
+    static boolean accepts(LivingEntity entity) {
+        // 开关按精确实体类型查，幼体的判断每次在当前实体上执行。
+        return !entity.isBaby() && config.enabled().contains(entity.getType());
+    }
+
+    static void reloadConfig(Path path) {
+        config = CorpseConfig.load(path);
+    }
+}

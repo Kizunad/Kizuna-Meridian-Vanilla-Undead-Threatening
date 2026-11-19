@@ -1,9 +1,20 @@
 plugins { id 'net.fabricmc.fabric-loom' }
 
-repositories { maven { url = 'https://maven.fabricmc.net/' } }
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+    flatDir { dirs kizunaWorkspace.artifact('pathfinding', 'core', false).parentFile }
+}
 dependencies {
     minecraft libs.minecraft
     implementation libs.fabric.loader
+    implementation libs.fabric.api
+    implementation libs.tomlj
+    implementation libs.protobuf.java
+    implementation('dev.kizuna.meridian.human:server') { transitive = false }
+    implementation('dev.kizuna.meridian.humanoid:fabric') { transitive = false }
+    implementation('dev.kizuna.meridian.humanoid:server') { transitive = false }
+    implementation('dev.kizuna.meridian.vanilla:fabric') { transitive = false }
+    compileOnly('dev.kizuna.meridian:fabric') { transitive = false }
     implementation project(':server')
     include project(':server')
 }
@@ -11,4 +22,37 @@ dependencies {
 processResources {
     inputs.property 'version', project.version
     filesMatching('fabric.mod.json') { expand version: project.version }
+}
+
+apply from: new File(kizunaWorkspace.directory('framework'), 'scripts/full-assembly.gradle')
+
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
+}
+
+dependencies {
+    gametestCompileOnly('dev.kizuna.meridian.technique:fabric') { transitive = false }
+    gametestCompileOnly 'dev.kizuna.meridian.technique:server'
+    gametestCompileOnly('dev.kizuna.meridian.vanilla:server') { transitive = false }
+    gametestRuntimeOnly project(':server')
+}
+
+loom {
+    mods {
+        meridian_undead { sourceSet sourceSets.main }
+        meridian_undead_test { sourceSet sourceSets.gametest }
+    }
+    runs {
+        gametest {
+            server()
+            name '尸身 GameTest'
+            source sourceSets.gametest
+            runDir 'build/gametest'
+            vmArg '-Dfabric-api.gametest'
+            vmArg '-Dfabric-api.gametest.report-file=build/gametest-results.xml'
+        }
+    }
 }
