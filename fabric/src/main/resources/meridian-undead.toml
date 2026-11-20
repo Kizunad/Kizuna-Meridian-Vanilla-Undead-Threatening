@@ -9,3 +9,9 @@ black_chance_min = 0.04
 black_chance_max = 0.12
 hairy_chance_min = 0.005
 hairy_chance_max = 0.02
+
+# 相对健康成人。肌肉耐力、恢复半衰期及寿命在出生或读回身体时应用；回血速度在重载配置后应用。
+muscle_endurance_multiplier = 2.0
+muscle_recovery_multiplier = 1.0
+natural_healing_multiplier = 1.0
+lifespan_multiplier = 2.0

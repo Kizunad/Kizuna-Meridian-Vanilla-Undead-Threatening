@@ -6,6 +6,7 @@ import dev.kizuna.meridian.humanoid.fabric.HumanoidSpeciesHooks;
 import dev.kizuna.meridian.humanoid.fabric.HumanoidSpawns;
 import dev.kizuna.meridian.humanoid.server.HumanoidTier;
 import dev.kizuna.meridian.humanoid.server.SpeciesBodyRules;
+import dev.kizuna.meridian.protocol.pb.BodyMessages.BodyTemplate;
 import dev.kizuna.meridian.undead.server.CorpseBody;
 import dev.kizuna.meridian.undead.server.CorpseRank;
 import dev.kizuna.meridian.undead.server.UndeadContent;
@@ -39,6 +40,7 @@ public final class UndeadFabric implements ModInitializer {
             foot_opening_weight = 1.0
             """;
     private static CorpseConfig config;
+    private static BodyTemplate template;
 
     @Override
     public void onInitialize() {
@@ -51,11 +53,12 @@ public final class UndeadFabric implements ModInitializer {
             }
         });
         var bundle = UndeadContent.bundle();
-        var template = bundle.getTemplates(0);
         var rules = new SpeciesBodyRules(
-                request -> CorpseBody.born(template, request.bodyId(), request.now(), rank(request.tier())),
+                request -> CorpseBody.born(template, request.bodyId(), request.now(), rank(request.tier()),
+                        config.physiology()),
                 (wounded, human) -> CorpseBody.lethal(wounded),
-                (spawn, random) -> config.chances().choose(spawn, random));
+                (spawn, random) -> config.chances().choose(spawn, random),
+                saved -> config.physiology().restore(saved, template));
         String table = SPECIES.values().stream().sorted()
                 .map(id -> ENTRY.formatted(id, UndeadContent.TEMPLATE_ID))
                 .collect(Collectors.joining("\n"));
@@ -67,13 +70,20 @@ public final class UndeadFabric implements ModInitializer {
         UndeadInspect.register();
     }
 
-    static boolean accepts(LivingEntity entity) {
+    public static boolean accepts(LivingEntity entity) {
         // 开关按精确实体类型查，幼体的判断每次在当前实体上执行。
         return !entity.isBaby() && config.enabled().contains(entity.getType());
     }
 
     static void reloadConfig(Path path) {
-        config = CorpseConfig.load(path);
+        var next = CorpseConfig.load(path);
+        var nextTemplate = UndeadContent.bundle(next.physiology()).getTemplates(0);
+        config = next;
+        template = nextTemplate;
+    }
+
+    public static double healingMultiplier() {
+        return config.physiology().healing();
     }
 
     static CorpseRank rank(HumanoidTier tier) {

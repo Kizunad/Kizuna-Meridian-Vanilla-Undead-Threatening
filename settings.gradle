@@ -23,6 +23,10 @@ kizunaWorkspace.includeSource('vanilla-damage', [
         fabric: 'dev.kizuna.meridian.vanilla:fabric',
         server: 'dev.kizuna.meridian.vanilla:server'
 ])
+kizunaWorkspace.includeSource('vanilla-healing', [
+        fabric: 'dev.kizuna.meridian.healing:fabric',
+        server: 'dev.kizuna.meridian.healing:server'
+])
 kizunaWorkspace.includeSource('technique', [
         fabric: 'dev.kizuna.meridian.technique:fabric',
         shared: 'dev.kizuna.meridian.technique:shared',

@@ -35,11 +35,16 @@ public final class CorpseBody {
     }
 
     public static BodySnapshot born(BodyTemplate template, String bodyId, TimeCursor now, CorpseRank rank) {
+        return born(template, bodyId, now, rank, CorpsePhysiology.DEFAULT);
+    }
+
+    public static BodySnapshot born(BodyTemplate template, String bodyId, TimeCursor now, CorpseRank rank,
+                                    CorpsePhysiology physiology) {
         var vitality = VitalityState.newBuilder()
                 .setAgeSeconds(HumanBirth.INITIAL_AGE_YEARS * HumanBirth.SECONDS_PER_YEAR)
                 .setDead(false /* dead */)
                 .setSpentLifespanSeconds(0)
-                .setLifespanLimitSeconds(HumanBirth.LIFESPAN_YEARS * HumanBirth.SECONDS_PER_YEAR)
+                .setLifespanLimitSeconds(physiology.lifespanSeconds())
                 .build();
         var structure = birthStructure(template.getStructure(), rank);
         var body = BodySnapshot.newBuilder()

@@ -2,6 +2,7 @@ package dev.kizuna.meridian.undead.fabric;
 
 import dev.kizuna.meridian.humanoid.server.HumanoidTier;
 import dev.kizuna.meridian.humanoid.server.SpeciesBodyRules.Spawn;
+import dev.kizuna.meridian.undead.server.CorpsePhysiology;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -15,12 +16,17 @@ import net.minecraft.world.entity.EntityType;
 import org.tomlj.Toml;
 import org.tomlj.TomlTable;
 
-record CorpseConfig(Set<EntityType<?>> enabled, Chances chances) {
+record CorpseConfig(Set<EntityType<?>> enabled, Chances chances, CorpsePhysiology physiology) {
     private static final String BLACK_MIN = "black_chance_min";
     private static final String BLACK_MAX = "black_chance_max";
     private static final String HAIRY_MIN = "hairy_chance_min";
     private static final String HAIRY_MAX = "hairy_chance_max";
     private static final Set<String> CHANCE_KEYS = Set.of(BLACK_MIN, BLACK_MAX, HAIRY_MIN, HAIRY_MAX);
+    private static final String ENDURANCE = "muscle_endurance_multiplier";
+    private static final String RECOVERY = "muscle_recovery_multiplier";
+    private static final String HEALING = "natural_healing_multiplier";
+    private static final String LIFESPAN = "lifespan_multiplier";
+    private static final Set<String> BODY_KEYS = Set.of(ENDURANCE, RECOVERY, HEALING, LIFESPAN);
 
     record Chances(double blackMin, double blackMax, double hairyMin, double hairyMax) {
         // 原版非和平难度可刷出怪物的有效当地难度下限和上限。
@@ -78,21 +84,31 @@ record CorpseConfig(Set<EntityType<?>> enabled, Chances chances) {
             });
             var chances = new Chances(chance(table, packaged, BLACK_MIN), chance(table, packaged, BLACK_MAX),
                     chance(table, packaged, HAIRY_MIN), chance(table, packaged, HAIRY_MAX));
-            return new CorpseConfig(Set.copyOf(enabled), chances);
+            var physiology = new CorpsePhysiology(number(table, packaged, ENDURANCE), number(table, packaged, RECOVERY),
+                    number(table, packaged, HEALING), number(table, packaged, LIFESPAN));
+            return new CorpseConfig(Set.copyOf(enabled), chances, physiology);
         } catch (IOException failure) {
             throw new UncheckedIOException("读写尸身配置失败：" + path, failure);
         }
     }
 
     private static double chance(TomlTable table, TomlTable packaged, String key) {
+        double probability = number(table, packaged, key);
+        if (probability < 0 || probability > 1) {
+            throw new IllegalArgumentException(key + " 应为 0 至 1 的几率");
+        }
+        return probability;
+    }
+
+    private static double number(TomlTable table, TomlTable packaged, String key) {
         var source = table.contains(key) ? table : packaged;
         if (source.get(key) instanceof Number number) {
-            double probability = number.doubleValue();
-            if (Double.isFinite(probability) && probability >= 0 && probability <= 1) {
-                return probability;
+            double value = number.doubleValue();
+            if (Double.isFinite(value)) {
+                return value;
             }
         }
-        throw new IllegalArgumentException(key + " 应为 0 至 1 的几率");
+        throw new IllegalArgumentException(key + " 应为有限数");
     }
 
     private static TomlTable parse(String text, String origin) {
@@ -102,7 +118,7 @@ record CorpseConfig(Set<EntityType<?>> enabled, Chances chances) {
             throw new IllegalArgumentException(origin + "：" + table.errors());
         }
         for (String key : table.keySet()) {
-            if (!UndeadFabric.SPECIES.containsValue(key) && !CHANCE_KEYS.contains(key)) {
+            if (!UndeadFabric.SPECIES.containsValue(key) && !CHANCE_KEYS.contains(key) && !BODY_KEYS.contains(key)) {
                 throw new IllegalArgumentException(origin + " 包含未知尸身开关：" + key);
             }
         }

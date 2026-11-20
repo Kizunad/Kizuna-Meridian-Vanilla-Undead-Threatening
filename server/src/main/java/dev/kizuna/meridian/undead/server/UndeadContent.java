@@ -14,7 +14,6 @@ public final class UndeadContent {
     public static final int CONTENT_VERSION = 1;
     private static final String PEARL_KIND = "meridian_undead:corpse_pearl";
     public static final String PEARL = "corpse_pearl";
-    private static final double MUSCLE_ENDURANCE_JOULES = 1_000_000_000;
     private static final double MENTAL_ENDURANCE_RATIO = 0.2;
     private static final double PEARL_HP = 10;
     private static final double PEARL_THROUGHPUT = 1;
@@ -25,6 +24,10 @@ public final class UndeadContent {
     }
 
     public static AddonBundle bundle() {
+        return bundle(CorpsePhysiology.DEFAULT);
+    }
+
+    public static AddonBundle bundle(CorpsePhysiology physiology) {
         // 精确选择声明依赖的人体修订，同包里的其他模板不参与派生。
         var human = HumanContent.bundle();
         var humanReference = reference(HumanContent.TEMPLATE_ID, HumanContent.CONTENT_VERSION);
@@ -36,7 +39,7 @@ public final class UndeadContent {
                 .setSchemaVersion(human.getSchemaVersion())
                 .setManifest(manifest(human.getManifest()))
                 .addSymbols(pearlKind())
-                .addTemplates(corpse(adult))
+                .addTemplates(corpse(adult, physiology))
                 .build();
         AddonProtobuf.validateBundle(result);
         return result;
@@ -69,10 +72,10 @@ public final class UndeadContent {
                 .build();
     }
 
-    private static BodyTemplate corpse(BodyTemplate adult) {
+    private static BodyTemplate corpse(BodyTemplate adult, CorpsePhysiology physiology) {
         // 继承人体的本脏通路，尸丹另接任脉。
         var structure = adult.getStructure().toBuilder();
-        adjustTissueEndurance(structure);
+        adjustTissueEndurance(structure, physiology);
         adjustOrgans(structure);
         for (var channel : structure.getMeridiansBuilderList()) {
             String tag = CorpseRank.CHANNEL_TAGS.get(channel.getId());
@@ -109,11 +112,11 @@ public final class UndeadContent {
         return TemplateReference.newBuilder().setId(id).setVersion(version).build();
     }
 
-    private static void adjustTissueEndurance(BodyStructure.Builder structure) {
+    private static void adjustTissueEndurance(BodyStructure.Builder structure, CorpsePhysiology physiology) {
         // 注意力与肌肉各自使用组织做功预算，爆发功率和力量继续来自人体。
         for (var tissue : structure.getTissuesBuilderList()) {
             if (tissue.getKind().equals("human:muscle")) {
-                tissue.getCapacityBuilder().setEnduranceJoules(MUSCLE_ENDURANCE_JOULES);
+                physiology.scaleMuscle(tissue);
             } else if (tissue.getId().equals("attention_network")) {
                 var capacity = tissue.getCapacityBuilder();
                 double endurance = capacity.getEnduranceJoules() * MENTAL_ENDURANCE_RATIO;

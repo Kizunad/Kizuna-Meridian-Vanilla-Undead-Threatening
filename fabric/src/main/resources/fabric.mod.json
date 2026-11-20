@@ -11,10 +11,12 @@
     "meridian_technique:catalogs": "data/meridian_undead/technique_catalog.txtpb"
   },
   "entrypoints": {"main": ["dev.kizuna.meridian.undead.fabric.UndeadFabric"]},
+  "mixins": ["meridian_undead.mixins.json"],
   "depends": {
     "fabric-api": "*",
     "meridian_humanoid_host": "*",
     "meridian_vanilla_damage": "*",
+    "meridian_vanilla_healing": "*",
     "minecraft": "26.2",
     "java": ">=25",
     "fabricloader": ">=0.20.1",

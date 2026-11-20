@@ -41,7 +41,7 @@ public final class UndeadContentTest {
     private static final double MENTAL_ENDURANCE_RATIO = 0.2;
     private static final double PEARL_FREE_QI = 10;
     private static final double PEARL_HP = 10;
-    private static final double MUSCLE_ENDURANCE = 1_000_000_000;
+    private static final double MUSCLE_ENDURANCE_RATIO = 2;
     // 低于人体经脉的自然扩散起运量，可在收回时核对同一批货的完整余额。
     private static final double SHIPMENT_QI = 0.000_001;
     private static final int ADVANCE_MILLIS = 10_000;
@@ -131,7 +131,8 @@ public final class UndeadContentTest {
                 expected.getCapacityBuilder().setEnduranceJoules(original.getCapacity().getEnduranceJoules()
                         * MENTAL_ENDURANCE_RATIO);
             } else if (original.getKind().equals("human:muscle")) {
-                expected.getCapacityBuilder().setEnduranceJoules(MUSCLE_ENDURANCE);
+                expected.getCapacityBuilder().setEnduranceJoules(original.getCapacity().getEnduranceJoules()
+                        * MUSCLE_ENDURANCE_RATIO);
             }
             assertEquals(original.getId(), expected.build(), undead.getTissues(i));
         }

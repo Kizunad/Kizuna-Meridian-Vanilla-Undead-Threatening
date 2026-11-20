@@ -3,6 +3,8 @@ package dev.kizuna.meridian.undead.fabric;
 import static dev.kizuna.meridian.undead.fabric.CorpseTestBodies.*;
 
 import dev.kizuna.meridian.human.server.HumanOpening;
+import dev.kizuna.meridian.human.server.HumanBirth;
+import dev.kizuna.meridian.protocol.pb.HealthMessages.DamageKind;
 import dev.kizuna.meridian.humanoid.fabric.HumanoidEntityAccess;
 import dev.kizuna.meridian.humanoid.server.HumanoidTier;
 import dev.kizuna.meridian.protocol.QiDensity;
@@ -49,6 +51,9 @@ public final class CorpseBirthGameTest {
             {0.75, 0.04, 0.045}, {3.75, 0.08, 0.0925}, {6.75, 0.12, 0.14}
     };
     private static final double MARGIN = 0.0000001;
+    private static final double LEGACY_ENDURANCE = 1_000_000_000;
+    private static final double WORK_FATIGUE = 21;
+    private static final double SPENT_LIFESPAN = 700;
     static final Path CONFIG = FabricLoader.getInstance().getConfigDir().resolve("meridian-undead.toml");
 
     @GameTest
@@ -274,28 +279,70 @@ public final class CorpseBirthGameTest {
         try {
             force(alternate, HumanoidTier.TRUE_QI);
             var old = spawn(test, EntityTypes.HUSK);
-            var snapshot = body(old).toBuilder();
+            var snapshot = woundedLegacyBody(old);
             for (var channel : snapshot.getStructureBuilder().getMeridiansBuilderList()) {
                 var inherited = channel.getTagsList().stream().filter(tag -> !tag.startsWith("meridian_undead:"))
                         .toList();
                 channel.clearTags()
                         .addAllTags(inherited);
             }
-            var legacy = snapshot.build();
-            var saved = save(old);
-            saved.getCompound(SAVE_KEY).orElseThrow().putByteArray("body", legacy.toByteArray());
-            old.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
-            var restored = EntityTypes.HUSK.create(test.getLevel(), EntitySpawnReason.LOAD);
-            load(restored, saved);
-            test.getLevel().addFreshEntity(restored);
-            var actual = body(restored);
-            test.assertTrue(actual.equals(legacy), "2.3 白僵存档被重生或改写");
-            assertPearl(test, actual, WHITE_CAPACITY, 0);
+            var expected = snapshot.build();
+            var restored = reloadLegacy(test, old, expected);
+            assertPearl(test, body(restored), WHITE_CAPACITY, 0);
+            restored.setNoAi(true /* noAi */);
+            CorpseEnduranceGameTest.rest(test, restored, CorpseEnduranceGameTest.HEALTHY_DOSE);
         } finally {
             UndeadFabric.reloadConfig(CONFIG);
             Files.deleteIfExists(alternate);
         }
         test.succeed();
+    }
+
+    @GameTest
+    public void legacyHairyRetainsItsOpenedChannelsAndPearl(GameTestHelper test) {
+        var old = commanded(test, EntityTypes.HUSK, HumanoidTier.TRUE_QI);
+        var expected = woundedLegacyBody(old).build();
+        var restored = reloadLegacy(test, old, expected);
+        assertRank(test, body(restored), HAIRY_CHANNELS, HAIRY_CAPACITY, HAIRY_QI);
+        test.succeed();
+    }
+
+    private static BodySnapshot.Builder woundedLegacyBody(Zombie mob) {
+        var snapshot = damage(mob, part("abdomen"), CorpseEnduranceGameTest.WOUND_HP, DamageKind.CUSTOM).toBuilder();
+        var vitality = snapshot.getVitalityBuilder();
+        vitality.setAgeSeconds(vitality.getAgeSeconds() + SPENT_LIFESPAN);
+        vitality.setSpentLifespanSeconds(SPENT_LIFESPAN);
+        var muscle = snapshot.getStructure().getTissuesList().stream()
+                .filter(t -> t.getKind().equals("human:muscle")).findFirst().orElseThrow();
+        snapshot.getTissueStatesBuilderList().stream().filter(t -> t.getId().equals(muscle.getId()))
+                .findFirst().orElseThrow().setFatigue(WORK_FATIGUE);
+        return snapshot;
+    }
+
+    private static Zombie reloadLegacy(GameTestHelper test, Zombie old, BodySnapshot expected) {
+        var saved = save(old);
+        var stored = saved.getCompound(SAVE_KEY).orElseThrow();
+        var receipts = stored.getList("receipts").orElseThrow();
+        stored.putByteArray("body", oldParameters(expected).toByteArray());
+        old.remove(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+        var restored = EntityTypes.HUSK.create(test.getLevel(), EntitySpawnReason.LOAD);
+        load(restored, saved);
+        test.getLevel().addFreshEntity(restored);
+        test.assertTrue(body(restored).equals(expected), "旧身体迁移丢失个体状态或没有更新上限");
+        var reloaded = save(restored).getCompound(SAVE_KEY).orElseThrow().getList("receipts").orElseThrow();
+        test.assertTrue(!receipts.isEmpty() && reloaded.containsAll(receipts), "迁移丢失回执");
+        return restored;
+    }
+
+    private static BodySnapshot oldParameters(BodySnapshot current) {
+        var legacy = current.toBuilder();
+        for (var muscle : legacy.getStructureBuilder().getTissuesBuilderList()) {
+            if (muscle.getKind().equals("human:muscle")) {
+                muscle.getCapacityBuilder().setEnduranceJoules(LEGACY_ENDURANCE);
+            }
+        }
+        legacy.getVitalityBuilder().setLifespanLimitSeconds(HumanBirth.LIFESPAN_YEARS * HumanBirth.SECONDS_PER_YEAR);
+        return legacy.build();
     }
 
     @GameTest
