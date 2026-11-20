@@ -33,6 +33,10 @@ sourceSets {
         compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
         runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
     }
+    clienttest {
+        compileClasspath += sourceSets.main.compileClasspath + sourceSets.main.output
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.main.output
+    }
 }
 
 dependencies {
@@ -47,6 +51,7 @@ loom {
     mods {
         meridian_undead { sourceSet sourceSets.main }
         meridian_undead_test { sourceSet sourceSets.gametest }
+        meridian_undead_clienttest { sourceSet sourceSets.clienttest }
     }
     runs {
         gametest {
@@ -57,5 +62,22 @@ loom {
             vmArg '-Dfabric-api.gametest'
             vmArg '-Dfabric-api.gametest.report-file=build/gametest-results.xml'
         }
+        clientGametest {
+            client()
+            name '尸修创造页客户端测试'
+            source sourceSets.clienttest
+            runDir providers.gradleProperty('eggsClienttestRunDir').getOrElse('build/clienttest')
+            vmArg '-Dfabric.client.gametest'
+            vmArg '-Dfabric.client.gametest.modid=meridian_undead_clienttest'
+            programArgs '--width', '1280', '--height', '720'
+        }
+    }
+}
+
+tasks.named('runClientGametest') {
+    doFirst {
+        def directory = file(providers.gradleProperty('eggsClienttestRunDir').getOrElse('build/clienttest'))
+        directory.mkdirs()
+        new File(directory, 'options.txt').text = 'onboardAccessibility:false\nlang:zh_cn\n'
     }
 }

@@ -62,16 +62,20 @@ public final class CorpseBirthGameTest {
             for (var tier : HumanoidTier.values()) {
                 var zombie = commanded(test, type, tier);
                 var snapshot = body(zombie);
-                test.assertTrue(HumanoidTier.of(snapshot) == tier, "命令未造出指定道行");
-                switch (tier) {
-                    case MORTAL -> assertRank(test, snapshot, Set.of(), WHITE_CAPACITY, 0);
-                    case WANDERING_QI -> assertRank(test, snapshot, BLACK_CHANNELS, BLACK_CAPACITY, BLACK_QI);
-                    case TRUE_QI -> assertRank(test, snapshot, HAIRY_CHANNELS, HAIRY_CAPACITY, HAIRY_QI);
-                }
+                assertBirthRank(test, snapshot, tier);
                 zombie.discard();
             }
         }
         test.succeed();
+    }
+
+    static void assertBirthRank(GameTestHelper test, BodySnapshot snapshot, HumanoidTier tier) {
+        test.assertTrue(HumanoidTier.of(snapshot) == tier, "未造出指定道行 " + tier);
+        switch (tier) {
+            case MORTAL -> assertRank(test, snapshot, Set.of(), WHITE_CAPACITY, 0);
+            case WANDERING_QI -> assertRank(test, snapshot, BLACK_CHANNELS, BLACK_CAPACITY, BLACK_QI);
+            case TRUE_QI -> assertRank(test, snapshot, HAIRY_CHANNELS, HAIRY_CAPACITY, HAIRY_QI);
+        }
     }
 
     private static void assertRank(GameTestHelper test, BodySnapshot body, Set<String> opened, int capacity, int qi) {

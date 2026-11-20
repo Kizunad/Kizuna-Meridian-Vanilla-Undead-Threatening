@@ -1,0 +1,12 @@
+{
+  "itemGroup.meridian_undead.undead": "尸修",
+  "item.meridian_undead.spawn_egg.tooltip": "对着刷怪笼使用可设定其生成的僵尸。",
+  "item.meridian_undead.zombie_black_spawn_egg": "黑僵刷怪蛋 · 僵尸",
+  "item.meridian_undead.zombie_hairy_spawn_egg": "毛僵刷怪蛋 · 僵尸",
+  "item.meridian_undead.husk_black_spawn_egg": "黑僵刷怪蛋 · 尸壳",
+  "item.meridian_undead.husk_hairy_spawn_egg": "毛僵刷怪蛋 · 尸壳",
+  "item.meridian_undead.drowned_black_spawn_egg": "黑僵刷怪蛋 · 溺尸",
+  "item.meridian_undead.drowned_hairy_spawn_egg": "毛僵刷怪蛋 · 溺尸",
+  "item.meridian_undead.zombie_villager_black_spawn_egg": "黑僵刷怪蛋 · 僵尸村民",
+  "item.meridian_undead.zombie_villager_hairy_spawn_egg": "毛僵刷怪蛋 · 僵尸村民"
+}

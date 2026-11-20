@@ -65,6 +65,7 @@ public final class UndeadFabric implements ModInitializer {
         var species = HumanoidSpeciesHooks.registerAll(table, rules, UndeadFabric::accepts, List.of(bundle));
         species.forEach(entry -> HumanoidSpawns.registerCommandGroup(entry,
                 () -> new ZombieGroupData(false /* isBaby */, false /* canSpawnJockey */)));
+        UndeadSpawnEggs.register(species);
         HumanDamage.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
         VanillaDamageFabric.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
         UndeadInspect.register();
