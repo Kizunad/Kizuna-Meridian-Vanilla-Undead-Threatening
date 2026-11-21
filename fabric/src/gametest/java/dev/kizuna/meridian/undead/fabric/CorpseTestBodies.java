@@ -10,6 +10,7 @@ import dev.kizuna.meridian.protocol.pb.HealthMessages.DamageKind;
 import dev.kizuna.meridian.protocol.pb.MeridianMessages.BodyCommand;
 import dev.kizuna.meridian.protocol.pb.MeridianMessages.RequestEnvelope;
 import dev.kizuna.meridian.vanilla.fabric.VanillaDamageFabric;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
@@ -54,15 +55,28 @@ final class CorpseTestBodies {
     }
 
     static BodySnapshot damage(LivingEntity entity, HealthTarget target, double dose, DamageKind kind) {
+        return damage(entity, target, dose, kind, OptionalDouble.empty());
+    }
+
+    static BodySnapshot protectedDamage(LivingEntity entity, HealthTarget target, double dose, DamageKind kind,
+                                        double protectedDamageShare) {
+        return damage(entity, target, dose, kind, OptionalDouble.of(protectedDamageShare));
+    }
+
+    private static BodySnapshot damage(LivingEntity entity, HealthTarget target, double dose, DamageKind kind,
+                                       OptionalDouble protectedDamageShare) {
         // 测试直接提交到健康宿主，让本击经过物种裁决和框架的权威提交。
         var prior = body(entity);
-        var damage = DamageBody.newBuilder()
+        var damageBuilder = DamageBody.newBuilder()
                 .setSourceId("meridian_undead:test")
                 .setDamageType("meridian_undead:test")
                 .setKind(kind)
                 .setHit(target)
-                .setDamageHp(dose)
-                .build();
+                .setDamageHp(dose);
+        if (protectedDamageShare.isPresent()) {
+            damageBuilder.setProtectedDamageShare(protectedDamageShare.getAsDouble());
+        }
+        var damage = damageBuilder.build();
         var command = BodyCommand.newBuilder()
                 .setBodyId(prior.getId())
                 .setExpectedRevision(prior.getRevision())

@@ -6,6 +6,7 @@ import dev.kizuna.meridian.protocol.pb.BodyMessages.BodySnapshot;
 import dev.kizuna.meridian.protocol.pb.BodyMessages.MeridianOpeningStage;
 import dev.kizuna.meridian.protocol.pb.BodyMessages.QiInventory;
 import dev.kizuna.meridian.technique.fabric.TechniqueFabric;
+import dev.kizuna.meridian.technique.fabric.world.TechniqueStatusBenefits;
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.CastRequest;
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.TechniqueFailure;
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.TechniqueReference;
@@ -15,15 +16,22 @@ import dev.kizuna.meridian.technique.server.TechniqueService;
 import dev.kizuna.meridian.technique.server.TechniqueState;
 import dev.kizuna.meridian.undead.server.UndeadContent;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import java.util.function.Consumer;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Entity.RemovalReason;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 
 import static dev.kizuna.meridian.undead.fabric.CorpseTestBodies.*;
 import static dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.TechniqueFailure.*;
@@ -34,6 +42,24 @@ public final class CorpseTechniqueGameTest {
     private static final Art HIDE = new Art("meridian_undead:bronze_hide", 5, 500, 30000);
     private static final List<Art> ARTS = List.of(LEAP, HIDE);
     private static final String GUARD = "meridian_basic_techniques:guard";
+    private static final String BRONZE_HIDE_ID = "meridian_undead:bronze_hide";
+    private static final double BRONZE_HIDE_PROTECTED_SHARE = 0.6;
+    private static final double BRONZE_HIDE_HALF_PEARL_SHARE = 0.3;
+    private static final double BRONZE_HIDE_HALF_HP = 0.5;
+    private static final double BRONZE_HIDE_SPEED_MULTIPLIER = 0.7;
+    private static final double SPEED_TOLERANCE = 1e-9;
+    private static final int BRONZE_HIDE_DURATION_TICKS = 200;
+    private static final int BRONZE_HIDE_RESTORED_CHECK_TICKS = 1;
+    private static final int BRONZE_HIDE_EXPIRED_CHECK_TICKS = 202;
+    private static final int BRONZE_HIDE_LIFECYCLE_TEST_MAX_TICKS = 230;
+    private static final int WALK_TICKS = 20;
+    private static final int SETTLE_TICKS = 3;
+    private static final double MOVEMENT_TOLERANCE = 0.08;
+    private static final double WALK_SPEED = 1;
+    private static final int WALK_LANE_LENGTH = 6;
+    private static final int WALK_TARGET_Z = WALK_LANE_LENGTH;
+    private static final float AUTO_CAST_TRIGGER_DOSE = 1.0F;
+    private static final int AUTO_CAST_CHECK_TICKS = 30;
 
     @GameTest
     public void whiteAndLivingCannotLearnOrCastCorpseArts(GameTestHelper test) {
@@ -77,6 +103,233 @@ public final class CorpseTechniqueGameTest {
             }
         }
         test.succeed();
+    }
+
+    @GameTest(maxTicks = 40)
+    public void realMeleeHitStartsBronzeHideOnlyWithLivingTarget(GameTestHelper test) {
+        var target = CorpseBirthGameTest.commanded(test, EntityTypes.HUSK, HumanoidTier.WANDERING_QI);
+        var victim = test.spawn(EntityTypes.VILLAGER, SPAWN, SPAWN, SPAWN);
+        var attacker = test.spawn(EntityTypes.COW, SPAWN, SPAWN, SPAWN);
+        target.setTarget(victim);
+        target.invulnerableTime = 0;
+        test.assertTrue(target.hurtServer(test.getLevel(), test.getLevel().damageSources().mobAttack(attacker),
+                AUTO_CAST_TRIGGER_DOSE),
+                "近战实打没有造成有效伤害");
+
+        test.runAfterDelay(AUTO_CAST_CHECK_TICKS, () -> {
+            var benefit = TechniqueStatusBenefits.get("meridian_undead:bronze_hide");
+            test.assertTrue(target.hasEffect(benefit.effect()), "命中后未自动起铜皮");
+            test.succeed();
+        });
+    }
+
+    @GameTest(maxTicks = 40)
+    public void realMeleeHitDoesNotStartBronzeHideWithoutTarget(GameTestHelper test) {
+        var target = CorpseBirthGameTest.commanded(test, EntityTypes.HUSK, HumanoidTier.WANDERING_QI);
+        var attacker = test.spawn(EntityTypes.COW, SPAWN, SPAWN, SPAWN);
+        target.invulnerableTime = 0;
+        test.assertTrue(target.hurtServer(test.getLevel(), test.getLevel().damageSources().mobAttack(attacker),
+                AUTO_CAST_TRIGGER_DOSE),
+                "近战实打没有造成有效伤害");
+
+        test.runAfterDelay(AUTO_CAST_CHECK_TICKS, () -> {
+            var benefit = TechniqueStatusBenefits.get("meridian_undead:bronze_hide");
+            test.assertTrue(!target.hasEffect(benefit.effect()), "没有攻击目标时自动起了铜皮");
+            test.succeed();
+        });
+    }
+
+    @GameTest
+    public void protectedMeleeHitDoesNotWriteHit(GameTestHelper test) {
+        var target = CorpseBirthGameTest.commanded(test, EntityTypes.HUSK, HumanoidTier.WANDERING_QI);
+        var benefit = TechniqueStatusBenefits.get(BRONZE_HIDE_ID);
+        TechniqueStatusBenefits.apply(target, benefit.benefit());
+        var attacker = test.spawn(EntityTypes.COW, SPAWN, SPAWN, SPAWN);
+        target.invulnerableTime = 0;
+        test.assertTrue(target.hurtServer(test.getLevel(), test.getLevel().damageSources().mobAttack(attacker),
+                AUTO_CAST_TRIGGER_DOSE),
+                "铜皮下近战实打没有造成有效伤害");
+        test.assertTrue(TechniqueFabric.service().staggerRemainingMillis(target.getUUID()) == 0,
+                "铜皮保护的近战实打写入了 HIT");
+        test.succeed();
+    }
+
+    @GameTest
+    public void bronzeHideProtectsOnlyDirectStrikesAndUndead(GameTestHelper test) {
+        var corpse = CorpseBirthGameTest.commanded(test, EntityTypes.HUSK, HumanoidTier.WANDERING_QI);
+        var benefit = TechniqueStatusBenefits.get(BRONZE_HIDE_ID);
+        TechniqueStatusBenefits.apply(corpse, benefit.benefit());
+        var attacker = test.spawn(EntityTypes.COW, SPAWN, SPAWN, SPAWN);
+        var snapshot = body(corpse);
+        DamageSource melee = corpse.damageSources().mobAttack(attacker);
+        assertProtectedShare(test, UndeadFabric.protectedDamageShare(corpse, melee, snapshot),
+                BRONZE_HIDE_PROTECTED_SHARE, "近战实打未受保护");
+
+        var arrow = test.spawn(EntityTypes.ARROW, SPAWN, SPAWN, SPAWN);
+        arrow.setOwner(attacker);
+        DamageSource arrowSource = corpse.damageSources().arrow(arrow, attacker);
+        assertProtectedShare(test, UndeadFabric.protectedDamageShare(corpse, arrowSource, snapshot),
+                BRONZE_HIDE_PROTECTED_SHARE, "箭矢实打未受保护");
+
+        var halfPearl = halfPearl(snapshot);
+        assertProtectedShare(test, UndeadFabric.protectedDamageShare(corpse, melee, halfPearl),
+                BRONZE_HIDE_HALF_PEARL_SHARE, "尸丹半血时保护份额未线性减半");
+        assertProtectedShare(test, UndeadFabric.protectedDamageShare(corpse, melee, emptyPearl(snapshot)),
+                0, "尸丹归零时仍有保护份额");
+
+        assertUnprotected(test, corpse, corpse.damageSources().fall(), snapshot, "摔落");
+        assertUnprotected(test, corpse, corpse.damageSources().inFire(), snapshot, "火");
+        assertUnprotected(test, corpse, corpse.damageSources().magic(), snapshot, "魔法");
+
+        var villager = test.spawn(EntityTypes.VILLAGER, SPAWN, SPAWN, SPAWN);
+        TechniqueStatusBenefits.apply(villager, benefit.benefit());
+        assertUnprotected(test, villager, villager.damageSources().mobAttack(attacker), body(villager), "生人");
+
+        corpse.removeEffect(benefit.effect());
+        assertUnprotected(test, corpse, melee, snapshot, "药效移除后");
+        test.succeed();
+    }
+
+    @GameTest(maxTicks = BRONZE_HIDE_LIFECYCLE_TEST_MAX_TICKS)
+    public void bronzeHideMovementSpeedClearsAndRestoresFromSave(GameTestHelper test) {
+        var source = CorpseBirthGameTest.commanded(test, EntityTypes.HUSK, HumanoidTier.WANDERING_QI);
+        var benefit = TechniqueStatusBenefits.get(BRONZE_HIDE_ID);
+        double baseSpeed = movementSpeed(source);
+        layWalkLane(test);
+        double baseDistance = walkedBlocks(test, source);
+
+        TechniqueStatusBenefits.apply(source, benefit.benefit());
+        assertSpeed(test, source, baseSpeed, "铜皮没有降低移速");
+        double slowedDistance = walkedBlocks(test, source);
+        assertMovementMultiplier(test, baseDistance, slowedDistance);
+        clearBronzeHide(test, source);
+        test.assertTrue(Math.abs(movementSpeed(source) - baseSpeed) <= SPEED_TOLERANCE,
+                "清除药效后移速修饰仍在");
+
+        TechniqueStatusBenefits.apply(source, benefit.benefit());
+        Zombie restored = restoredWithEntityData(test, source);
+        test.runAfterDelay(BRONZE_HIDE_RESTORED_CHECK_TICKS, () -> {
+            test.assertTrue(restored.hasEffect(benefit.effect()), "读档没有恢复铜皮时效");
+            assertSpeed(test, restored, baseSpeed, "读档后移速修饰未恢复");
+        });
+        test.runAfterDelay(BRONZE_HIDE_EXPIRED_CHECK_TICKS, () -> {
+            test.assertTrue(!restored.hasEffect(benefit.effect()), "铜皮超过十秒仍未到期");
+            test.assertTrue(Math.abs(movementSpeed(restored) - baseSpeed) <= SPEED_TOLERANCE,
+                    "铜皮到期后移速修饰仍在");
+            test.succeed();
+        });
+    }
+
+    private static void clearBronzeHide(GameTestHelper test, LivingEntity source) {
+        int[] result = {0};
+        var commandSource = test.getLevel().getServer().createCommandSourceStack()
+                .withLevel(test.getLevel())
+                .withPosition(source.position())
+                .withCallback((success, value) -> result[0] = success ? value : 0);
+        String command = "effect clear " + source.getStringUUID() + " " + BRONZE_HIDE_ID;
+        test.getLevel().getServer().getCommands().performPrefixedCommand(commandSource, command);
+        test.assertTrue(result[0] == 1, "effect clear 没有清掉铜皮");
+    }
+
+    private static void assertProtectedShare(GameTestHelper test, OptionalDouble actual, double expected,
+                                             String message) {
+        test.assertTrue(actual.isPresent()
+                        && Math.abs(actual.getAsDouble() - expected) <= SPEED_TOLERANCE,
+                message);
+    }
+
+    private static void assertUnprotected(GameTestHelper test, LivingEntity target, DamageSource source,
+                                         BodySnapshot snapshot, String label) {
+        test.assertTrue(UndeadFabric.protectedDamageShare(target, source, snapshot).isEmpty(),
+                label + "伤害不应受铜皮保护");
+    }
+
+    private static BodySnapshot halfPearl(BodySnapshot snapshot) {
+        var edited = snapshot.toBuilder();
+        var pearl = edited.getOrganStatesBuilderList().stream()
+                .filter(state -> state.getId().equals(UndeadContent.PEARL))
+                .findFirst()
+                .orElseThrow();
+        pearl.setHp(pearl.getHp() * BRONZE_HIDE_HALF_HP);
+        return edited.build();
+    }
+
+    private static BodySnapshot emptyPearl(BodySnapshot snapshot) {
+        var edited = snapshot.toBuilder();
+        var pearl = edited.getOrganStatesBuilderList().stream()
+                .filter(state -> state.getId().equals(UndeadContent.PEARL))
+                .findFirst()
+                .orElseThrow();
+        pearl.setHp(0);
+        return edited.build();
+    }
+
+    private static double movementSpeed(LivingEntity entity) {
+        return entity.getAttribute(Attributes.MOVEMENT_SPEED).getValue();
+    }
+
+    private static void assertSpeed(GameTestHelper test, LivingEntity entity, double baseSpeed, String message) {
+        double expectedAttributeMultiplier = Math.sqrt(BRONZE_HIDE_SPEED_MULTIPLIER);
+        double expectedSpeed = baseSpeed * expectedAttributeMultiplier;
+        double actualSpeed = movementSpeed(entity);
+        test.assertTrue(Math.abs(actualSpeed - expectedSpeed) <= SPEED_TOLERANCE,
+                message + "，期望 " + expectedSpeed + "，实际 " + actualSpeed);
+    }
+
+    private static void assertMovementMultiplier(GameTestHelper test, double baseDistance, double slowedDistance) {
+        test.assertTrue(baseDistance > SPEED_TOLERANCE, "基线移速没有实际位移");
+        double actualMultiplier = slowedDistance / baseDistance;
+        test.assertTrue(Math.abs(actualMultiplier - BRONZE_HIDE_SPEED_MULTIPLIER) <= MOVEMENT_TOLERANCE,
+                "实际地面移速没有降到七成：" + actualMultiplier);
+    }
+
+    private static void layWalkLane(GameTestHelper test) {
+        int firstLaneX = SPAWN - 1;
+        int lastLaneX = SPAWN + 1;
+        int floorY = SPAWN - 1;
+        for (int z = 0; z <= WALK_TARGET_Z; z++) {
+            for (int x = firstLaneX; x <= lastLaneX; x++) {
+                BlockPos position = test.absolutePos(new BlockPos(x, floorY, z));
+                test.getLevel().setBlockAndUpdate(position, Blocks.STONE.defaultBlockState());
+            }
+        }
+    }
+
+    private static double walkedBlocks(GameTestHelper test, Zombie mob) {
+        Vec3 home = mob.position();
+        float homeYaw = mob.getYRot();
+        Vec3 start = settled(test, mob);
+        Vec3 target = Vec3.atBottomCenterOf(test.absolutePos(new BlockPos(SPAWN, SPAWN, WALK_TARGET_Z)));
+        for (int tick = 0; tick < WALK_TICKS; tick++) {
+            mob.getMoveControl().setWantedPosition(target.x, target.y, target.z, WALK_SPEED);
+            mob.getMoveControl().tick();
+            mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza));
+        }
+        double walked = mob.position().subtract(start).horizontalDistance();
+        mob.snapTo(home.x, home.y, home.z, homeYaw, mob.getXRot());
+        mob.setDeltaMovement(Vec3.ZERO);
+        mob.setZza(0);
+        return walked;
+    }
+
+    private static Vec3 settled(GameTestHelper test, Zombie mob) {
+        Vec3 start = Vec3.atBottomCenterOf(test.absolutePos(new BlockPos(SPAWN, SPAWN, 0)));
+        mob.snapTo(start.x, start.y, start.z, 0, 0);
+        mob.setDeltaMovement(Vec3.ZERO);
+        for (int tick = 0; tick < SETTLE_TICKS; tick++) {
+            mob.travel(Vec3.ZERO);
+        }
+        test.assertTrue(mob.onGround(), "铜皮移速夹具起点没有站在地上");
+        return mob.position();
+    }
+
+    private static Zombie restoredWithEntityData(GameTestHelper test, Zombie source) {
+        var saved = save(source);
+        source.remove(RemovalReason.UNLOADED_TO_CHUNK);
+        var restored = EntityTypes.HUSK.create(test.getLevel(), EntitySpawnReason.LOAD);
+        load(restored, saved);
+        test.getLevel().addFreshEntity(restored);
+        return restored;
     }
 
     private static void paidOnce(GameTestHelper test, Zombie mob, BodySnapshot before, Art art) {

@@ -73,5 +73,19 @@ definitions {
     interruptible_by_damage: true
   }
   cooldown_millis: 30000
-  presentation { display_name: "铜皮" }
+  presentation {
+    icon_id: "meridian_undead:bronze_hide"
+    display_name: "铜皮"
+  }
+  effects {
+    at_millis: 500
+    status_benefit {
+      id: "meridian_undead:bronze_hide"
+      duration_millis: 10000
+      color_rgb: 7398305
+      plain {
+        movement_speed_multiplier: 0.7
+      }
+    }
+  }
 }

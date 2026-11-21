@@ -8,5 +8,7 @@
   "item.meridian_undead.drowned_black_spawn_egg": "Black Drowned Spawn Egg",
   "item.meridian_undead.drowned_hairy_spawn_egg": "Hairy Drowned Spawn Egg",
   "item.meridian_undead.zombie_villager_black_spawn_egg": "Black Zombie Villager Spawn Egg",
-  "item.meridian_undead.zombie_villager_hairy_spawn_egg": "Hairy Zombie Villager Spawn Egg"
+  "item.meridian_undead.zombie_villager_hairy_spawn_egg": "Hairy Zombie Villager Spawn Egg",
+  "effect.meridian_undead.bronze_hide": "Bronze Hide",
+  "effect.meridian_undead.bronze_hide.description": "Direct strikes spare skin and bone, while fire and spells still pierce."
 }

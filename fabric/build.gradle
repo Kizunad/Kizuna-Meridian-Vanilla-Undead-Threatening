@@ -16,6 +16,8 @@ dependencies {
     implementation('dev.kizuna.meridian.vanilla:fabric') { transitive = false }
     implementation('dev.kizuna.meridian.healing:fabric') { transitive = false }
     implementation('dev.kizuna.meridian.healing:server') { transitive = false }
+    implementation 'dev.kizuna.meridian.technique:fabric'
+    implementation 'dev.kizuna.meridian.technique:server'
     compileOnly('dev.kizuna.meridian:fabric') { transitive = false }
     implementation project(':server')
     include project(':server')

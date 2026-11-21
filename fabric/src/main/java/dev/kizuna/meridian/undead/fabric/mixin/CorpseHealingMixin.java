@@ -14,12 +14,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LivingEntity.class)
 abstract class CorpseHealingMixin {
     @Unique private static final int MERIDIAN_SATURATED_HEAL_TICKS = 10;
+    @Unique private static final int MERIDIAN_BRONZE_HIDE_RETRY_TICKS = 10;
     @Unique private int meridian$restTicks;
+    @Unique private int meridian$bronzeHideTicks;
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void meridian$rest(CallbackInfo callback) {
         if (!((Object) this instanceof Zombie corpse) || !(corpse.level() instanceof ServerLevel world)) {
             return;
+        }
+        if (++meridian$bronzeHideTicks >= MERIDIAN_BRONZE_HIDE_RETRY_TICKS) {
+            meridian$bronzeHideTicks = 0;
+            UndeadFabric.tryBronzeHide(corpse, world);
         }
         if (!corpse.isAlive() || corpse.getHealth() >= corpse.getMaxHealth() || corpse.hurtTime > 0
                 || corpse.getTarget() != null || !UndeadFabric.accepts(corpse)
