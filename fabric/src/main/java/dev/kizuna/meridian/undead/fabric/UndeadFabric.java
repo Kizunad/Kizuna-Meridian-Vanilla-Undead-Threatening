@@ -103,6 +103,7 @@ public final class UndeadFabric implements ModInitializer {
         VanillaDamageFabric.registerDamageObserver(UndeadFabric::observeDamage);
         TechniqueFabric.SERVICE_STARTED.register(service -> service.addCastCheck(UndeadFabric::checkCast));
         UndeadInspect.register();
+        UndeadLeapFabric.initialize();
     }
 
     public static boolean accepts(LivingEntity entity) {
@@ -151,6 +152,17 @@ public final class UndeadFabric implements ModInitializer {
         service.cast(corpse.getUUID(), request.get());
     }
 
+    static boolean shouldPrioritizeBronzeHide(Zombie corpse, ServerLevel world) {
+        if (!hasRecentProtectedHit(corpse.getUUID(), world.getGameTime())
+                || !canAttemptBronzeHide(corpse, world)
+                || corpse.hasEffect(TechniqueStatusBenefits.get(BRONZE_HIDE_ID).effect())) {
+            return false;
+        }
+        TechniqueService service = TechniqueFabric.service();
+        return service.known(corpse.getUUID()).stream()
+                .anyMatch(entry -> entry.technique().getId().equals(BRONZE_HIDE_ID));
+    }
+
     private static boolean hasRecentProtectedHit(UUID entityId, long gameTime) {
         Long hitTick = LAST_PROTECTED_HITS.get(entityId);
         if (hitTick == null) {
@@ -171,7 +183,7 @@ public final class UndeadFabric implements ModInitializer {
         boolean known = service.known(corpse.getUUID()).stream()
                 .anyMatch(entry -> entry.technique().getId().equals(BRONZE_HIDE_ID));
         if (!known || corpse.hasEffect(TechniqueStatusBenefits.get(BRONZE_HIDE_ID).effect())
-                || service.observe(corpse.getUUID()).flatMap(observation -> observation.cast()).isPresent()) {
+                || service.observe(corpse.getUUID()).flatMap(TechniqueService.Observation::cast).isPresent()) {
             return Optional.empty();
         }
         var body = VanillaDamageFabric.inspectBody(corpse).orElse(null);

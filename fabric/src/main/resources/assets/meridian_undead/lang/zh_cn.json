@@ -10,5 +10,8 @@
   "item.meridian_undead.zombie_villager_black_spawn_egg": "黑僵刷怪蛋 · 僵尸村民",
   "item.meridian_undead.zombie_villager_hairy_spawn_egg": "毛僵刷怪蛋 · 僵尸村民",
   "effect.meridian_undead.bronze_hide": "铜皮",
-  "effect.meridian_undead.bronze_hide.description": "实打落在身上时，皮与骨一并受护，火与术仍可穿透。"
+  "effect.meridian_undead.bronze_hide.description": "实打落在身上时，皮与骨一并受护，火与术仍可穿透。",
+  "technique.meridian_undead.leap": "纵",
+  "technique.meridian_undead.leap.note": "朽躯一纵，直扑猎物。",
+  "message.meridian_undead.weak_legs": "腿脉无力，无法起纵"
 }

@@ -5,7 +5,10 @@
   "name": "尸修创造页客户端测试",
   "environment": "client",
   "entrypoints": {
-    "fabric-client-gametest": ["dev.kizuna.meridian.undead.fabric.UndeadEggsClientTest"]
+    "fabric-client-gametest": [
+      "dev.kizuna.meridian.undead.fabric.UndeadEggsClientTest",
+      "dev.kizuna.meridian.undead.fabric.UndeadLeapClientTest"
+    ]
   },
   "depends": {"meridian_undead": "*"}
 }

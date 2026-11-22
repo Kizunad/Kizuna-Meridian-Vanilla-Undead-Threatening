@@ -9,6 +9,7 @@
       "dev.kizuna.meridian.undead.fabric.CorpseBirthGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseEnduranceGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseTechniqueGameTest",
+      "dev.kizuna.meridian.undead.fabric.CorpseLeapGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseBirthReleaseGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseSpawnSourcesGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseSpawnEggGameTest",

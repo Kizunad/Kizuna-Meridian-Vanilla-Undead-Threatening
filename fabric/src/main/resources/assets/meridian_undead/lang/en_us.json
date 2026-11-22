@@ -10,5 +10,8 @@
   "item.meridian_undead.zombie_villager_black_spawn_egg": "Black Zombie Villager Spawn Egg",
   "item.meridian_undead.zombie_villager_hairy_spawn_egg": "Hairy Zombie Villager Spawn Egg",
   "effect.meridian_undead.bronze_hide": "Bronze Hide",
-  "effect.meridian_undead.bronze_hide.description": "Direct strikes spare skin and bone, while fire and spells still pierce."
+  "effect.meridian_undead.bronze_hide.description": "Direct strikes spare skin and bone, while fire and spells still pierce.",
+  "technique.meridian_undead.leap": "Leap",
+  "technique.meridian_undead.leap.note": "The corpse vaults toward the living.",
+  "message.meridian_undead.weak_legs": "Your legs are too weak to leap"
 }

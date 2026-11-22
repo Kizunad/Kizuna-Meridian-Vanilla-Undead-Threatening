@@ -95,6 +95,12 @@ public final class CorpseTechniqueGameTest {
         for (var rank : List.of(HumanoidTier.WANDERING_QI, HumanoidTier.TRUE_QI)) {
             for (var art : ARTS) {
                 var mob = CorpseBirthGameTest.commanded(test, EntityTypes.HUSK, rank);
+                if (art == LEAP) {
+                    CorpseLeapGameTest.prepareGround(test);
+                    double groundY = test.absolutePos(new BlockPos(SPAWN, SPAWN, SPAWN)).getY();
+                    mob.setPos(mob.getX(), groundY, mob.getZ());
+                    mob.setOnGround(true /* onGround */);
+                }
                 var before = body(mob);
                 test.assertTrue(known(mob).containsAll(List.of(GUARD, LEAP.id(), HIDE.id())), "天生式清单缺失");
                 TechniqueFabric.service().learn(mob.getUUID(), art.id());
