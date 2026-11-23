@@ -46,6 +46,7 @@ definitions {
   presentation {
     icon_id: "meridian_undead:leap"
     display_name: "纵"
+    description: "朽躯借腿脉一纵，扑向尚有温气的活物。"
   }
   effects {
     at_millis: 600
@@ -114,6 +115,7 @@ definitions {
   presentation {
     icon_id: "meridian_undead:bronze_hide"
     display_name: "铜皮"
+    description: "尸丹吐气，铜色从骨缝漫上皮肉，硬接来的拳脚。"
   }
   effects {
     at_millis: 500
@@ -126,4 +128,13 @@ definitions {
       }
     }
   }
+}
+
+books { id: "meridian_undead:corpse_arts" display_name: "尸行秘录" }
+volumes {
+  id: "meridian_undead:corpse_movement"
+  book_id: "meridian_undead:corpse_arts"
+  display_name: "腾挪卷"
+  techniques { id: "meridian_undead:leap" version: 1 }
+  techniques { id: "meridian_undead:bronze_hide" version: 1 }
 }

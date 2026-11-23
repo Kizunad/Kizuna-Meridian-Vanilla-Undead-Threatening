@@ -42,6 +42,10 @@ sourceSets {
 }
 
 dependencies {
+    gametestImplementation testFixtures('dev.kizuna.meridian.technique:fabric')
+    clienttestCompileOnly files(kizunaWorkspace.artifact('ui', 'client', false),
+            kizunaWorkspace.artifact('combat-ui', 'fabric', false), kizunaWorkspace.artifact('combat-ui', 'shared', false))
+    clienttestCompileOnly libs.owo
     gametestCompileOnly('dev.kizuna.meridian.technique:fabric') { transitive = false }
     gametestCompileOnly('dev.kizuna.meridian.human:shared') { transitive = false }
     gametestCompileOnly 'dev.kizuna.meridian.technique:server'

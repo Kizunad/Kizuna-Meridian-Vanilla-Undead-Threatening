@@ -21,11 +21,15 @@ import dev.kizuna.meridian.technique.server.TechniqueAddonResources;
 import dev.kizuna.meridian.technique.server.TechniqueAvailability;
 import dev.kizuna.meridian.technique.server.TechniqueBinder;
 import dev.kizuna.meridian.technique.server.TechniqueCatalogManifest;
+import dev.kizuna.meridian.technique.server.TechniqueCatalogSource;
 import dev.kizuna.meridian.technique.server.TechniqueRegistry;
+import dev.kizuna.meridian.technique.server.TechniqueScrollCatalog;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +56,28 @@ public final class UndeadContentTest {
         var registry = addons();
         assertTrue(HumanContent.bundle().getTemplatesList().contains(adult(registry)));
         assertTrue(UndeadContent.bundle().getTemplatesList().contains(corpse(registry)));
+    }
+
+    @Test
+    public void corpseScrollCatalogCreatesOneUndroppedVolumeForItsInnateArts() throws IOException {
+        // 从尸修自己的安装资源读取卷，检查成员、掉落声明及默认注册的物品身份。
+        Path catalogPath = Path.of("..", "fabric", "src", "main", "resources", "data",
+                UndeadContent.NAMESPACE, "technique_catalog.txtpb");
+        var undeadCatalog = TechniqueCatalogManifest.parseText(catalogPath.toString(), Files.readString(catalogPath));
+        var volume = undeadCatalog.getVolumesList().stream()
+                .filter(item -> item.getId().equals("meridian_undead:corpse_movement"))
+                .findFirst().orElseThrow();
+
+        assertEquals("meridian_undead:corpse_arts", volume.getBookId());
+        assertEquals(List.of("meridian_undead:leap", "meridian_undead:bronze_hide"),
+                volume.getTechniquesList().stream().map(TechniqueReference::getId).toList());
+        assertEquals(0, volume.getScrollDropsCount());
+        assertTrue(TechniqueScrollCatalog.hasScrollItem(volume));
+
+        var source = new TechniqueCatalogSource("undead", addons(), undeadCatalog);
+        var scrollCatalog = new TechniqueScrollCatalog(List.of(source));
+        assertEquals(List.of("meridian_undead:corpse_movement_scroll"),
+                scrollCatalog.registrationOrder().stream().map(TechniqueScrollCatalog.Scroll::itemId).toList());
     }
 
     @Test

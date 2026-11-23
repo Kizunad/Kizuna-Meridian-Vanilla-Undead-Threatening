@@ -1,0 +1,8 @@
+{
+  "criteria": {
+    "read": {
+      "trigger": "meridian_technique:volume_learned",
+      "conditions": {"volume": "meridian_undead:corpse_movement"}
+    }
+  }
+}

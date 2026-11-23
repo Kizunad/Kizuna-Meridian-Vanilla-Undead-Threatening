@@ -12,6 +12,14 @@
   "effect.meridian_undead.bronze_hide": "铜皮",
   "effect.meridian_undead.bronze_hide.description": "实打落在身上时，皮与骨一并受护，火与术仍可穿透。",
   "technique.meridian_undead.leap": "纵",
-  "technique.meridian_undead.leap.note": "朽躯一纵，直扑猎物。",
+  "technique.meridian_undead.leap.note": "朽躯借腿脉一纵，扑向尚有温气的活物。",
+  "technique.meridian_undead.bronze_hide": "铜皮",
+  "technique.meridian_undead.bronze_hide.note": "尸丹吐气，铜色从骨缝漫上皮肉，硬接来的拳脚。",
+  "book.meridian_undead.corpse_arts": "尸行秘录",
+  "codex.source.meridian_undead.corpse_movement": "尸身通脉自得此法，世间未见传卷。",
+  "book.meridian_undead.corpse_arts.note": "不问血肉，只记朽躯如何借骨而行。",
+  "volume.meridian_undead.corpse_movement": "腾挪卷",
+  "volume.meridian_undead.corpse_movement.note": "腿脉通时能纵，臂脉通时生铜皮。翻尽此卷，也替尸身开不得一脉。",
+  "item.meridian_undead.corpse_movement_scroll": "尸行秘录·腾挪卷",
   "message.meridian_undead.weak_legs": "腿脉无力，无法起纵"
 }

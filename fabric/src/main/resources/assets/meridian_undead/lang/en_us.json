@@ -12,6 +12,14 @@
   "effect.meridian_undead.bronze_hide": "Bronze Hide",
   "effect.meridian_undead.bronze_hide.description": "Direct strikes spare skin and bone, while fire and spells still pierce.",
   "technique.meridian_undead.leap": "Leap",
-  "technique.meridian_undead.leap.note": "The corpse vaults toward the living.",
+  "technique.meridian_undead.leap.note": "The corpse borrows its leg meridians and vaults toward warm flesh.",
+  "technique.meridian_undead.bronze_hide": "Bronze Hide",
+  "technique.meridian_undead.bronze_hide.note": "Breath from the corpse pearl climbs through the bones and hardens the flesh against blows.",
+  "book.meridian_undead.corpse_arts": "Record of Corpse-Walking",
+  "codex.source.meridian_undead.corpse_movement": "The art comes to a corpse as its meridians open. No scroll is known to pass from hand to hand.",
+  "book.meridian_undead.corpse_arts.note": "It records how a ruined body may still borrow its bones to move.",
+  "volume.meridian_undead.corpse_movement": "Vaulting Volume",
+  "volume.meridian_undead.corpse_movement.note": "Open leg meridians let the corpse leap. Open arm meridians bring bronze hide. These pages cannot open a single meridian for it.",
+  "item.meridian_undead.corpse_movement_scroll": "Record of Corpse-Walking · Vaulting Volume",
   "message.meridian_undead.weak_legs": "Your legs are too weak to leap"
 }

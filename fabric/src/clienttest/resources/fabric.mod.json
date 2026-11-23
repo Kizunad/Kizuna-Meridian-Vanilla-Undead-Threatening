@@ -7,6 +7,7 @@
   "entrypoints": {
     "fabric-client-gametest": [
       "dev.kizuna.meridian.undead.fabric.UndeadEggsClientTest",
+      "dev.kizuna.meridian.ui.client.CorpseScrollClientTest",
       "dev.kizuna.meridian.undead.fabric.UndeadLeapClientTest"
     ]
   },

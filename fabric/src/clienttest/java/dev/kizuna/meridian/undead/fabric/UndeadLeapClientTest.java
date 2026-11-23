@@ -164,7 +164,7 @@ public final class UndeadLeapClientTest implements FabricClientGameTest {
         return camera;
     }
 
-    private static Zombie spawnCorpse(MinecraftServer server, ServerLevel level, Vec3 position) {
+    public static Zombie spawnCorpse(MinecraftServer server, ServerLevel level, Vec3 position) {
         Feedback feedback = new Feedback();
         var source = server.createCommandSourceStack()
                 .withLevel(level)
