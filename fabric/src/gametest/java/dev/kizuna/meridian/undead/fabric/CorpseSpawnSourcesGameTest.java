@@ -28,6 +28,7 @@ import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.BaseSpawner;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.block.Blocks;
@@ -36,6 +37,7 @@ import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -44,6 +46,7 @@ public final class CorpseSpawnSourcesGameTest {
     private static final int ATTEMPTS = 128;
     private static final int ROOM_HEIGHT = 48;
     private static final int PLAYER_DISTANCE = 48;
+    private static final int SPAWNER_RANGE = 4;
     private static final int CAVE_RADIUS = 18;
     private static final int CAVE_HEIGHT = 3;
     private static final int LIGHT_FLAGS = 3;
@@ -131,29 +134,44 @@ public final class CorpseSpawnSourcesGameTest {
             settings.put("SpawnData", spawnData);
             settings.putShort("Delay", (short) 0);
             settings.putInt("SpawnCount", 1);
+            settings.putInt("SpawnRange", SPAWNER_RANGE);
             var spawner = cage.getSpawner();
             var input = TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), settings);
             spawner.load(level, pos, input);
-            var area = new AABB(pos).inflate(CAVE_RADIUS);
-            Set<UUID> prior = level.getEntities(EntityTypes.HUSK, area, Entity::isAlive).stream()
-                    .map(Entity::getUUID).collect(Collectors.toSet());
-            for (int i = 0; i < ATTEMPTS; i++) {
-                spawner.serverTick(level, pos);
-                var adults = level.getEntities(EntityTypes.HUSK, area,
-                        mob -> !mob.isBaby() && !prior.contains(mob.getUUID()));
-                if (!adults.isEmpty()) {
-                    assertWhiteOrBaby(test, adults.getFirst());
-                    test.succeed();
-                    return;
-                }
-            }
-            test.fail("原版刷怪笼未产生成年尸壳");
+            assertSpawnerCreatesWhiteAdult(test, spawner, pos, input);
         } finally {
             rules.set(GameRules.SPAWNER_BLOCKS_WORK, wasEnabled, level.getServer());
             UndeadFabric.reloadConfig(CorpseBirthGameTest.CONFIG);
             Files.deleteIfExists(config);
             level.getServer().getPlayerList().remove(player);
         }
+    }
+
+    private static void assertSpawnerCreatesWhiteAdult(GameTestHelper test, BaseSpawner spawner, BlockPos pos,
+                                                       ValueInput settings) {
+        var level = test.getLevel();
+        var area = new AABB(pos).inflate(SPAWNER_RANGE);
+        Set<UUID> prior = level.getEntities(EntityTypes.HUSK, area, Entity::isAlive).stream()
+                .map(Entity::getUUID).collect(Collectors.toSet());
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            spawner.serverTick(level, pos);
+            var births = level.getEntities(EntityTypes.HUSK, area,
+                    mob -> mob.isAlive() && !prior.contains(mob.getUUID()));
+            if (births.isEmpty()) {
+                continue;
+            }
+            var mob = births.getFirst();
+            assertWhiteOrBaby(test, mob);
+            boolean baby = mob.isBaby();
+            mob.discard();
+            if (!baby) {
+                test.succeed();
+                return;
+            }
+            // 幼体已用掉本轮生成，重新装入零延迟的同一只笼子，继续验证成年个体。
+            spawner.load(level, pos, settings);
+        }
+        test.fail("原版刷怪笼未产生成年尸壳");
     }
 
     @GameTest

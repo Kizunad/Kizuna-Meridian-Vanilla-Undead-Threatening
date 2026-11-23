@@ -32,6 +32,7 @@ public final class CorpseLeapGameTest {
     private static final int VERSION = 1;
     private static final int WARMUP_TICKS = 12;
     private static final int AI_SUPPRESSION_DELAY_TICKS = 12;
+    private static final int INTERRUPT_TICK = 4;
     private static final int FLIGHT_CHECK_TICKS = 42;
     private static final int AI_CHECK_TICKS = 70;
     private static final int RECOVERY_TICKS = 20;
@@ -144,12 +145,17 @@ public final class CorpseLeapGameTest {
     @GameTest(maxTicks = TEST_TIMEOUT_TICKS)
     public void damageInterruptCancelsWarmup(GameTestHelper test) {
         Zombie actor = actor(test, EntityTypes.HUSK, ActorAi.DISABLED);
+        // 保留定向飞行所需的移动刻，打断后原版游荡目标不能再驱动位移。
+        actor.removeFreeWill();
         LivingEntity target = target(test, actor, 6, 0);
         double targetHealth = target.getHealth();
         double actorX = actor.getX();
         CastOutcome outcome = cast(test, actor);
         assertAccepted(test, outcome);
-        test.runAfterDelay(4, () -> actor.hurtServer(test.getLevel(), actor.damageSources().generic(), 1));
+        test.runAfterDelay(INTERRUPT_TICK, () -> {
+            boolean hurt = actor.hurtServer(test.getLevel(), actor.damageSources().generic(), 1);
+            test.assertTrue(hurt, "纵起手期间未受到打断伤害");
+        });
         test.runAfterDelay(FLIGHT_CHECK_TICKS, () -> {
             test.assertTrue(target.getHealth() == targetHealth, "受击打断后仍命中目标");
             test.assertTrue(Math.abs(actor.getX() - actorX) < POSITION_EPSILON, "受击打断后仍起跳");
@@ -284,6 +290,12 @@ public final class CorpseLeapGameTest {
         actor.setPos(actor.getX() - SPAWN, actor.getY(), actor.getZ());
         actor.setOnGround(true /* onGround */);
         LivingEntity target = target(test, actor, distance, 0);
+        // 原版在实体刻结算出生装备的属性修正，结算后再取主击伤害并起手。
+        test.runAfterDelay(1, () -> castAtStationaryTarget(test, actor, target, distance));
+    }
+
+    private static void castAtStationaryTarget(GameTestHelper test, Zombie actor, LivingEntity target,
+                                               double distance) {
         double targetHealth = target.getHealth();
         double actorX = actor.getX();
         double baseDamage = actor.getAttributeValue(Attributes.ATTACK_DAMAGE);
