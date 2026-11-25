@@ -1,6 +1,7 @@
 package dev.kizuna.meridian.undead.fabric.mixin;
 
 import dev.kizuna.meridian.healing.fabric.HealingFabric;
+import dev.kizuna.meridian.humanoid.fabric.HumanoidSwordForms;
 import dev.kizuna.meridian.undead.fabric.UndeadFabric;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -26,6 +27,7 @@ abstract class CorpseHealingMixin {
         if (++meridian$bronzeHideTicks >= MERIDIAN_BRONZE_HIDE_RETRY_TICKS) {
             meridian$bronzeHideTicks = 0;
             UndeadFabric.tryBronzeHide(corpse, world);
+            HumanoidSwordForms.tryCast(corpse);
         }
         if (!corpse.isAlive() || corpse.getHealth() >= corpse.getMaxHealth() || corpse.hurtTime > 0
                 || corpse.getTarget() != null || !UndeadFabric.accepts(corpse)

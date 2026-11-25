@@ -269,7 +269,7 @@ public final class UndeadLeapClientTest implements FabricClientGameTest {
                 target.getZ(), target.getHealth(), actor.isNoAi(), target.isNoAi());
     }
 
-    private static void captureFrame(ClientGameTestContext context, String prefix, int frame) {
+    static void captureFrame(ClientGameTestContext context, String prefix, int frame) {
         String fileName = String.format(Locale.ROOT, "%s_%03d.png", prefix, frame);
         Path file = SCREENSHOT_DIRECTORY.resolve(fileName);
         context.runOnClient(client -> Screenshot.takeScreenshot(client.gameRenderer.mainRenderTarget(),
@@ -299,7 +299,7 @@ public final class UndeadLeapClientTest implements FabricClientGameTest {
         world.getServer().runCommand(command);
     }
 
-    private static void write(String name, String content) {
+    static void write(String name, String content) {
         try {
             Files.writeString(FabricLoader.getInstance().getGameDir().resolve(name), content);
         } catch (IOException exception) {

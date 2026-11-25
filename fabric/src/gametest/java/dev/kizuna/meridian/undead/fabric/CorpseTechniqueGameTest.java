@@ -463,7 +463,7 @@ public final class CorpseTechniqueGameTest {
                 .toList();
     }
 
-    private static double pearlAmount(BodySnapshot body) {
+    static double pearlAmount(BodySnapshot body) {
         // 只统计尸丹缓存，独立于全身库存总量。
         var pearl = body.getOrganStatesList().stream().filter(organ -> organ.getId().equals(UndeadContent.PEARL))
                 .findFirst().orElseThrow();

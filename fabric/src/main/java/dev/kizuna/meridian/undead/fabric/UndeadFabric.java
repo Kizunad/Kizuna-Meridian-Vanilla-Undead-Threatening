@@ -2,6 +2,7 @@ package dev.kizuna.meridian.undead.fabric;
 
 import dev.kizuna.meridian.human.server.HumanContent;
 import dev.kizuna.meridian.human.server.HumanDamage;
+import dev.kizuna.meridian.humanoid.fabric.HumanoidSpeciesBirths;
 import dev.kizuna.meridian.humanoid.fabric.HumanoidSpeciesHooks;
 import dev.kizuna.meridian.humanoid.fabric.HumanoidSpawns;
 import dev.kizuna.meridian.humanoid.server.HumanoidTier;
@@ -12,6 +13,8 @@ import dev.kizuna.meridian.technique.fabric.TechniqueFabric;
 import dev.kizuna.meridian.technique.fabric.world.TechniqueStatusBenefits;
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.CastRequest;
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.TechniqueReference;
+import dev.kizuna.meridian.technique.server.TechniqueAddonCostEntrypoint;
+import dev.kizuna.meridian.technique.server.TechniqueAddonCostPayers;
 import dev.kizuna.meridian.technique.server.TechniqueService;
 import dev.kizuna.meridian.undead.server.CorpseBody;
 import dev.kizuna.meridian.undead.server.CorpseRank;
@@ -27,6 +30,7 @@ import java.util.OptionalDouble;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -40,13 +44,15 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.piglin.AbstractPiglin;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.entity.monster.zombie.Zombie.ZombieGroupData;
 import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 
-public final class UndeadFabric implements ModInitializer {
+public final class UndeadFabric implements ModInitializer, TechniqueAddonCostEntrypoint {
     static final Map<EntityType<?>, String> SPECIES = Map.of(EntityTypes.ZOMBIE, "zombie",
-            EntityTypes.HUSK, "husk", EntityTypes.DROWNED, "drowned", EntityTypes.ZOMBIE_VILLAGER, "zombie_villager");
+            EntityTypes.HUSK, "husk", EntityTypes.DROWNED, "drowned", EntityTypes.ZOMBIE_VILLAGER, "zombie_villager",
+            EntityTypes.ZOMBIFIED_PIGLIN, "zombified_piglin");
     private static final String ENTRY = """
             [species."minecraft:%1$s"]
             template = "%2$s"
@@ -70,8 +76,14 @@ public final class UndeadFabric implements ModInitializer {
     private static final Map<UUID, Long> LAST_PROTECTED_HITS = new HashMap<>();
 
     @Override
+    public void registerPayers(TechniqueAddonCostPayers payers) {
+        // 尸身照常绑定已开经脉，起手所需的真元由尸丹提供。
+        payers.registerQiPaymentOrgan(UndeadContent.TEMPLATE_ID, UndeadContent.PEARL);
+    }
+
+    @Override
     public void onInitialize() {
-        // 四种实体使用同一修订的图纸、出生工厂和死亡裁决。
+        // 成年尸身共用图纸、出生工厂和死亡裁决。
         Path path = FabricLoader.getInstance().getConfigDir().resolve("meridian-undead.toml");
         reloadConfig(path);
         ServerLifecycleEvents.SERVER_STARTING.register(server -> currentServer = server);
@@ -96,7 +108,9 @@ public final class UndeadFabric implements ModInitializer {
         var species = HumanoidSpeciesHooks.registerAll(table, rules, UndeadFabric::accepts, List.of(bundle));
         species.forEach(entry -> HumanoidSpawns.registerCommandGroup(entry,
                 () -> new ZombieGroupData(false /* isBaby */, false /* canSpawnJockey */)));
-        UndeadSpawnEggs.register(species);
+        UndeadSpawnEggs.register(species.stream()
+                .filter(entry -> !entry.entityId().equals("minecraft:zombified_piglin")).toList());
+        registerZombification();
         HumanDamage.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
         VanillaDamageFabric.registerTemplateDefaults(UndeadContent.TEMPLATE_ID, HumanContent.TEMPLATE_ID);
         VanillaDamageFabric.registerDamageProtection(UndeadFabric::protectedDamageShare);
@@ -104,6 +118,17 @@ public final class UndeadFabric implements ModInitializer {
         TechniqueFabric.SERVICE_STARTED.register(service -> service.addCastCheck(UndeadFabric::checkCast));
         UndeadInspect.register();
         UndeadLeapFabric.initialize();
+    }
+
+    private static void registerZombification() {
+        ServerLivingEntityEvents.MOB_CONVERSION.register((previous, next, params) -> {
+            // 原版完成装备交接之后，以旧身档位重建尸身和尸丹，学卷只看新身带来的剑。
+            if (previous instanceof AbstractPiglin
+                    && next.getType() == EntityTypes.ZOMBIFIED_PIGLIN && accepts(next)) {
+                VanillaDamageFabric.inspectBody(previous).map(HumanoidTier::of)
+                        .ifPresent(tier -> HumanoidSpeciesBirths.birth(next, tier));
+            }
+        });
     }
 
     public static boolean accepts(LivingEntity entity) {

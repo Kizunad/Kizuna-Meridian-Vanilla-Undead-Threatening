@@ -128,7 +128,8 @@ public final class CorpseSpeciesGameTest {
             String partial = "zombie = false\nhusk = false\n";
             Files.writeString(file, partial);
             var enabled = CorpseConfig.load(file).enabled();
-            test.assertTrue(enabled.equals(Set.of(EntityTypes.DROWNED, EntityTypes.ZOMBIE_VILLAGER)),
+            var expected = Set.of(EntityTypes.DROWNED, EntityTypes.ZOMBIE_VILLAGER, EntityTypes.ZOMBIFIED_PIGLIN);
+            test.assertTrue(enabled.equals(expected),
                     "缺少的尸身开关应采用随包默认值");
             test.assertTrue(Files.readString(file).equals(partial), "读取时改写了旧配置");
             Files.writeString(file, partial + "unlisted = true\n");
