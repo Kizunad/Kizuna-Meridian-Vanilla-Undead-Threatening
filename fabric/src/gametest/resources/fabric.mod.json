@@ -6,6 +6,7 @@
   "environment": "*",
   "entrypoints": {
     "fabric-gametest": [
+      "dev.kizuna.meridian.undead.fabric.NightVisitsGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseBirthGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseEnduranceGameTest",
       "dev.kizuna.meridian.undead.fabric.CorpseTechniqueGameTest",

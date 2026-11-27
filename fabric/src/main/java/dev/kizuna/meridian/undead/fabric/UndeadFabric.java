@@ -118,6 +118,7 @@ public final class UndeadFabric implements ModInitializer, TechniqueAddonCostEnt
         TechniqueFabric.SERVICE_STARTED.register(service -> service.addCastCheck(UndeadFabric::checkCast));
         UndeadInspect.register();
         UndeadLeapFabric.initialize();
+        NightVisits.register();
     }
 
     private static void registerZombification() {
