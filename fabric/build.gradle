@@ -71,6 +71,7 @@ loom {
             source sourceSets.gametest
             runDir 'build/gametest'
             vmArg '-Dfabric-api.gametest'
+            vmArg "-Dmeridian.repro.mode=${providers.gradleProperty('reproMode').getOrElse('full')}"
             if (providers.gradleProperty('gametestFilter').isPresent()) {
                 vmArg "-Dfabric-api.gametest.filter=${providers.gradleProperty('gametestFilter').get()}"
             }

@@ -12,6 +12,7 @@ import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.TechniqueFail
 import dev.kizuna.meridian.technique.protocol.pb.TechniqueMessages.TechniqueReference;
 import dev.kizuna.meridian.technique.server.TechniqueCastEndReason;
 import dev.kizuna.meridian.technique.server.TechniqueCastEnded;
+import dev.kizuna.meridian.technique.server.TechniqueKnowledge;
 import dev.kizuna.meridian.technique.server.TechniqueLeap;
 import dev.kizuna.meridian.technique.server.TechniqueService;
 import dev.kizuna.meridian.vanilla.fabric.VanillaDamageFabric;
@@ -22,11 +23,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -51,11 +54,15 @@ public final class UndeadLeapFabric {
     private static final long HIT_STAGGER_MILLIS = 200;
     private static final double HIT_STAGGER_MOVEMENT = 0.5;
     private static final int MISS_RECOVERY_TICKS = 20;
+    private static final AttachmentType<TierAtRevision> TIER = AttachmentRegistry.create(
+            Identifier.parse("meridian_undead:leap_tier"));
     private static final Map<UUID, Pending> PENDING = new HashMap<>();
     private static final Map<UUID, Long> NEXT_DECISION = new HashMap<>();
     private static final Map<UUID, Long> MISS_RECOVERY_END = new HashMap<>();
     private static final Set<String> CONTACTED_CASTS = new HashSet<>();
     private static MinecraftServer currentServer;
+
+    private record TierAtRevision(String bodyId, long revision, HumanoidTier tier) { }
 
     private record Pending(String castId, LeapProfile profile, Vec3 direction, double distance,
                            TechniqueLeap.Landing landing) { }
@@ -72,7 +79,6 @@ public final class UndeadLeapFabric {
         TechniqueFabric.CAST_OBSERVED.register(UndeadLeapFabric::castObserved);
         ServerLifecycleEvents.SERVER_STARTING.register(server -> currentServer = server);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stop());
-        ServerTickEvents.START_SERVER_TICK.register(UndeadLeapFabric::tick);
         ServerEntityEvents.ENTITY_UNLOAD.register((entity, world) -> unload(entity));
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> died(entity));
         ServerLivingEntityEvents.AFTER_DAMAGE.register(UndeadLeapFabric::staggerAfterDamage);
@@ -115,78 +121,59 @@ public final class UndeadLeapFabric {
         TechniqueLeaps.unlockDirectedActions(entity);
     }
 
-    private static void tick(MinecraftServer server) {
-        for (ServerLevel level : server.getAllLevels()) {
-            for (Entity entity : level.getAllEntities()) {
-                if (entity instanceof Mob mob) {
-                    tickMob(server, mob);
-                }
-            }
-        }
-    }
-
-    private static void tickMob(MinecraftServer server, Mob mob) {
+    public static void tickZombie(Zombie mob, ServerLevel level) {
         UUID entityId = mob.getUUID();
-        if (!directs(mob)) {
-            return;
-        }
-        if (recovering(mob)) {
+        if (recovering(mob) || PENDING.containsKey(entityId)) {
             mob.getNavigation().stop();
-            return;
-        }
-        if (PENDING.containsKey(entityId)) {
-            mob.getNavigation().stop();
-            return;
-        }
-        if (!mob.isAlive() || !mob.onGround() || mob.isNoAi() || mob.isInWater()
-                || sunlightBlocksLeap(mob) || !TechniqueFabric.running()) {
-            return;
-        }
-        TechniqueService service = TechniqueFabric.service();
-        if (service.observe(entityId).flatMap(TechniqueService.Observation::cast).isPresent()) {
             return;
         }
         LivingEntity target = mob.getTarget();
-        if (target == null || !target.isAlive() || target.level() != mob.level()) {
+        Long nextDecision = NEXT_DECISION.get(entityId);
+        if (target == null || !target.isAlive() || target.level() != level
+                || nextDecision != null && level.getGameTime() < nextDecision) {
             return;
         }
-        if (mob instanceof Zombie corpse && mob.level() instanceof ServerLevel level
-                && UndeadFabric.shouldPrioritizeBronzeHide(corpse, level)) {
+        if (!mob.isAlive() || !mob.onGround() || mob.isNoAi() || mob.isInWater() || sunlightBlocksLeap(mob)
+                || !TechniqueFabric.running() || !directs(mob) || UndeadFabric.shouldPrioritizeBronzeHide(mob, level)) {
             return;
         }
-        TechniqueDefinition definition = service.registry().findLatest(LEAP_ID).orElse(null);
-        if (definition == null || !known(service, entityId, definition)) {
+        TechniqueService service = TechniqueFabric.service();
+        var registry = service.registry();
+        TechniqueDefinition definition = registry.findLatest(LEAP_ID).orElse(null);
+        if (definition == null) {
             return;
         }
         LeapProfile profile = leapProfile(definition).orElse(null);
         if (profile == null || horizontalDistance(mob, target) < profile.getAiMinimumDistance()) {
             return;
         }
-        startAiLeap(mob, service, target, definition, profile);
+        var observed = service.observe(entityId).orElse(null);
+        if (observed == null || observed.cast().isPresent()) {
+            return;
+        }
+        var reference = TechniqueReference.newBuilder()
+                .setId(definition.getId())
+                .setVersion(definition.getVersion())
+                .build();
+        var body = observed.body();
+        if (TechniqueKnowledge.contains(registry, body, reference)) {
+            CastRequest request = request(body.id().value(), reference);
+            startAiLeap(mob, service, target, request, profile);
+        }
     }
 
     private static void startAiLeap(Mob mob, TechniqueService service, LivingEntity target,
-                                    TechniqueDefinition definition, LeapProfile profile) {
+                                    CastRequest request, LeapProfile profile) {
         UUID entityId = mob.getUUID();
         long gameTime = mob.level().getGameTime();
-        Long nextDecision = NEXT_DECISION.get(entityId);
-        if (nextDecision != null && gameTime < nextDecision) {
-            return;
-        }
         NEXT_DECISION.put(entityId, gameTime + profile.getAiDecisionTicks());
-        Optional<Pending> plan = plan(mob, profile, target.position(), newCastId());
+        Optional<Pending> plan = plan(mob, profile, target.position(), request.getCastId());
         if (plan.isEmpty()) {
             return;
         }
         Pending pending = plan.orElseThrow();
         PENDING.put(entityId, pending);
         TechniqueLeaps.lockDirectedActions(mob);
-        BodySnapshot body = VanillaDamageFabric.inspectBody(mob).orElse(null);
-        if (body == null) {
-            clearPending(entityId, pending);
-            return;
-        }
-        CastRequest request = request(body, definition, pending.castId());
         CastOutcome outcome = service.cast(entityId, request);
         if (failed(outcome)) {
             clearPending(entityId, pending);
@@ -212,25 +199,11 @@ public final class UndeadLeapFabric {
         }
     }
 
-    private static boolean known(TechniqueService service, UUID entityId, TechniqueDefinition definition) {
-        return service.known(entityId).stream()
-                .anyMatch(entry -> entry.technique().getId().equals(definition.getId())
-                        && entry.technique().getVersion() == definition.getVersion());
-    }
-
-    private static String newCastId() {
-        return UUID.randomUUID().toString();
-    }
-
-    private static CastRequest request(BodySnapshot body, TechniqueDefinition definition, String castId) {
-        TechniqueReference reference = TechniqueReference.newBuilder()
-                .setId(definition.getId())
-                .setVersion(definition.getVersion())
-                .build();
+    private static CastRequest request(String bodyId, TechniqueReference reference) {
         return CastRequest.newBuilder()
-                .setBodyId(body.getId())
+                .setBodyId(bodyId)
                 .setTechnique(reference)
-                .setCastId(castId)
+                .setCastId(UUID.randomUUID().toString())
                 .build();
     }
 
@@ -239,10 +212,10 @@ public final class UndeadLeapFabric {
             return Optional.empty();
         }
         LivingEntity actor = findEntity(entityId);
-        if (!(actor instanceof Zombie) || !UndeadFabric.accepts(actor)) {
+        if (!(actor instanceof Zombie corpse) || !UndeadFabric.accepts(corpse)) {
             return Optional.empty();
         }
-        HumanoidTier tier = tier(actor);
+        HumanoidTier tier = tier(corpse);
         if (tier == HumanoidTier.MORTAL) {
             return Optional.empty();
         }
@@ -424,8 +397,24 @@ public final class UndeadLeapFabric {
         return mob instanceof Zombie && UndeadFabric.accepts(mob) && tier(mob) != HumanoidTier.MORTAL;
     }
 
-    private static HumanoidTier tier(LivingEntity entity) {
-        return VanillaDamageFabric.inspectBody(entity).map(HumanoidTier::of).orElse(HumanoidTier.MORTAL);
+    private static HumanoidTier tier(Mob mob) {
+        // 用已绑定的本地快照校验版本，首次建身仍交给健康宿主。
+        BodySnapshot body = VanillaDamageFabric.existingMobBody(mob)
+                .or(() -> VanillaDamageFabric.inspectBody(mob))
+                .orElse(null);
+        if (body == null) {
+            mob.removeAttached(TIER);
+            return HumanoidTier.MORTAL;
+        }
+        var cached = mob.getAttached(TIER);
+        String bodyId = body.getId();
+        long revision = body.getRevision();
+        if (cached != null && cached.revision() == revision && cached.bodyId().equals(bodyId)) {
+            return cached.tier();
+        }
+        HumanoidTier tier = HumanoidTier.of(body);
+        mob.setAttached(TIER, new TierAtRevision(bodyId, revision, tier));
+        return tier;
     }
 
     private static LivingEntity findEntity(UUID entityId) {
